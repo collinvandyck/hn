@@ -10,6 +10,8 @@ This project uses `mise` to manage tools. Run `mise install` to set up:
 - `gh` (GitHub CLI)
 - `lazygit` (git TUI)
 
+To use the tools, you should call `mise exec -- [cargo|just|...] [args...]`
+
 ## Quick Reference
 
 ```bash

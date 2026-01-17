@@ -6,15 +6,15 @@ Test Story Title
 
 ┌Comments (5)──────────────────────────────────────────────────────────────────┐
 │▶ [-] commenter1 · 794d ago · 2 replies                                       │
-│        This is a great project! I love the vim keybindings.                  │
+│      This is a great project! I love the vim keybindings.                    │
 │                                                                              │
 │  ├─ [+] commenter2 · 794d ago · 1 replies                                    │
-│                                                                              │
-│  ├─ [ ] windowsuser · 794d ago                                               │
-│          Does this work on Windows?                                          │
+│  │                                                                           │
+│  └─ [ ] windowsuser · 794d ago                                               │
+│         Does this work on Windows?                                           │
 │                                                                              │
 │  [ ] searcher · 794d ago                                                     │
-│        Nice work! Any plans for search functionality?                        │
+│      Nice work! Any plans for search functionality?                          │
 │                                                                              │
 │                                                                              │
 │                                                                              │

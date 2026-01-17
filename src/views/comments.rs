@@ -39,6 +39,31 @@ fn render_header(frame: &mut Frame, title: &str, area: Rect, theme: &ResolvedThe
     frame.render_widget(header, area);
 }
 
+fn compute_tree_context(comments: &[Comment], visible_indices: &[usize]) -> Vec<Vec<bool>> {
+    visible_indices
+        .iter()
+        .enumerate()
+        .map(|(vis_idx, &actual_idx)| {
+            let depth = comments[actual_idx].depth;
+
+            (0..=depth)
+                .map(|check_depth| {
+                    for &future_idx in &visible_indices[vis_idx + 1..] {
+                        let future_depth = comments[future_idx].depth;
+                        if future_depth == check_depth {
+                            return true;
+                        }
+                        if future_depth < check_depth {
+                            return false;
+                        }
+                    }
+                    false
+                })
+                .collect()
+        })
+        .collect()
+}
+
 fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.theme;
 
@@ -83,12 +108,15 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
 
     let content_width = area.width.saturating_sub(4) as usize;
     let visible_indices = app.visible_comment_indices();
+    let tree_context = compute_tree_context(&app.comments, &visible_indices);
     let items: Vec<ListItem> = visible_indices
         .iter()
-        .map(|&i| {
+        .enumerate()
+        .map(|(vis_idx, &i)| {
             let comment = &app.comments[i];
             let is_expanded = app.expanded_comments.contains(&comment.id);
-            comment_to_list_item(comment, content_width, is_expanded, theme)
+            let has_more = &tree_context[vis_idx];
+            comment_to_list_item(comment, content_width, is_expanded, theme, has_more)
         })
         .collect();
 
@@ -120,20 +148,13 @@ fn comment_to_list_item(
     max_width: usize,
     is_expanded: bool,
     theme: &ResolvedTheme,
+    has_more_at_depth: &[bool],
 ) -> ListItem<'static> {
     let color = theme.depth_color(comment.depth);
-    let indent_width = comment.depth * 2;
-    let indent = " ".repeat(indent_width);
+    let depth = comment.depth;
     let has_children = !comment.kids.is_empty();
 
-    let depth_marker = if comment.depth > 0 {
-        Span::styled(
-            format!("{}├─ ", &indent[..indent_width.saturating_sub(3)]),
-            Style::default().fg(color),
-        )
-    } else {
-        Span::raw("")
-    };
+    let depth_marker = build_meta_tree_prefix(depth, has_more_at_depth, color);
 
     let expand_indicator = if has_children {
         if is_expanded {
@@ -173,30 +194,111 @@ fn comment_to_list_item(
     meta_spans.extend(child_info);
     let meta_line = Line::from(meta_spans);
 
-    if has_children && !is_expanded {
-        return ListItem::new(vec![meta_line, Line::from("")]);
+    // Hide text for collapsed comments with children, but only for nested comments
+    if has_children && !is_expanded && depth > 0 {
+        let empty_prefix = build_empty_line_prefix(depth, has_more_at_depth, color);
+        return ListItem::new(vec![meta_line, Line::from(vec![empty_prefix])]);
     }
 
     let text = strip_html(&comment.text);
-    let text_indent = indent.clone() + "      ";
-    let available_width = max_width.saturating_sub(text_indent.len()).max(20);
+    let text_prefix = build_text_prefix(depth, has_more_at_depth, color);
+    let prefix_width = text_prefix.content.len();
+    let available_width = max_width.saturating_sub(prefix_width).max(20);
     let wrapped_lines = wrap_text(&text, available_width);
 
     let mut lines = vec![meta_line];
 
     for wrapped_line in wrapped_lines {
         lines.push(Line::from(vec![
-            Span::styled(
-                text_indent.clone(),
-                Style::default().fg(theme.foreground_dim),
-            ),
+            text_prefix.clone(),
             Span::styled(wrapped_line, Style::default().fg(theme.comment_text)),
         ]));
     }
 
-    lines.push(Line::from(""));
+    let empty_prefix = build_empty_line_prefix(depth, has_more_at_depth, color);
+    lines.push(Line::from(vec![empty_prefix]));
 
     ListItem::new(lines)
+}
+
+fn build_meta_tree_prefix(
+    depth: usize,
+    has_more_at_depth: &[bool],
+    color: ratatui::style::Color,
+) -> Span<'static> {
+    if depth == 0 {
+        return Span::raw("");
+    }
+
+    let mut prefix = String::new();
+
+    for d in 1..depth {
+        if has_more_at_depth.get(d).copied().unwrap_or(false) {
+            prefix.push_str("│ ");
+        } else {
+            prefix.push_str("  ");
+        }
+    }
+
+    if has_more_at_depth.get(depth).copied().unwrap_or(false) {
+        prefix.push_str("├─ ");
+    } else {
+        prefix.push_str("└─ ");
+    }
+
+    Span::styled(prefix, Style::default().fg(color))
+}
+
+fn build_text_prefix(
+    depth: usize,
+    has_more_at_depth: &[bool],
+    color: ratatui::style::Color,
+) -> Span<'static> {
+    if depth == 0 {
+        return Span::raw("    ");
+    }
+
+    let mut prefix = String::new();
+
+    for d in 1..depth {
+        if has_more_at_depth.get(d).copied().unwrap_or(false) {
+            prefix.push_str("│ ");
+        } else {
+            prefix.push_str("  ");
+        }
+    }
+
+    if has_more_at_depth.get(depth).copied().unwrap_or(false) {
+        prefix.push_str("│  ");
+    } else {
+        prefix.push_str("   ");
+    }
+
+    prefix.push_str("    ");
+
+    Span::styled(prefix, Style::default().fg(color))
+}
+
+fn build_empty_line_prefix(
+    depth: usize,
+    has_more_at_depth: &[bool],
+    color: ratatui::style::Color,
+) -> Span<'static> {
+    if depth == 0 {
+        return Span::raw("");
+    }
+
+    let mut prefix = String::new();
+
+    for d in 1..=depth {
+        if has_more_at_depth.get(d).copied().unwrap_or(false) {
+            prefix.push_str("│ ");
+        } else {
+            prefix.push_str("  ");
+        }
+    }
+
+    Span::styled(prefix, Style::default().fg(color))
 }
 
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
