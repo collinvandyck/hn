@@ -1,0 +1,28 @@
+---
+source: src/views/stories.rs
+expression: output
+---
+[1]Top  [2]New  [3]Best  [4]Ask  [5]Show  [6]Jobs
+┌Top Stories───────────────────────────────────────────────────────────────────┐
+│    1. Show HN: I built a terminal UI for Hacker News (github.com)            │
+│       ▲ 142 | dang | 47 comments | 794d ago                                  │
+│    2. Why Rust is the Future of Systems Programming (example.com)            │
+│       ▲ 89 | pg | 23 comments | 794d ago                                     │
+│▶   3. Ask HN: What are you working on? (self)                                │
+│       ▲ 56 | sama | 128 comments | 795d ago                                  │
+│    4. The unreasonable effectiveness of simple HTML (blog.example.com)       │
+│       ▲ 234 | tptacek | 89 comments | 795d ago                               │
+│    5. A Deep Dive into Linux Kernel Networking (lwn.net)                     │
+│       ▲ 167 | patio11 | 34 comments | 795d ago                               │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+ Top  3/5 | H/L:feeds  ?:help  q:quit

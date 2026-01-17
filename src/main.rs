@@ -7,6 +7,9 @@ mod theme;
 mod tui;
 mod views;
 
+#[cfg(test)]
+mod test_utils;
+
 use std::path::Path;
 
 use anyhow::{Context, Result};

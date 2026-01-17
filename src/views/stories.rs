@@ -188,3 +188,92 @@ fn format_time(timestamp: u64) -> String {
         None => "?".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::{sample_stories, TestAppBuilder};
+    use crate::views::tests::render_to_string;
+
+    #[test]
+    fn test_stories_view_renders_list() {
+        let app = TestAppBuilder::new()
+            .with_stories(sample_stories())
+            .selected(0)
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_stories_view_selection_highlight() {
+        let app = TestAppBuilder::new()
+            .with_stories(sample_stories())
+            .selected(2) // Third story selected
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_stories_view_loading_state() {
+        let app = TestAppBuilder::new()
+            .loading()
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        // Loading state should show "Loading..." text
+        assert!(output.contains("Loading"));
+    }
+
+    #[test]
+    fn test_stories_view_error_state() {
+        let app = TestAppBuilder::new()
+            .error("Failed to fetch stories: connection timeout")
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        // Error state should show the error message
+        assert!(output.contains("connection timeout"));
+    }
+
+    #[test]
+    fn test_stories_view_empty_list() {
+        let app = TestAppBuilder::new().build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_stories_view_with_help() {
+        let app = TestAppBuilder::new()
+            .with_stories(sample_stories())
+            .show_help()
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        // Help text should be expanded
+        assert!(output.contains("j/k:nav"));
+    }
+}

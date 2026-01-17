@@ -316,7 +316,10 @@ fn strip_html(html: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::strip_html;
+    use super::*;
+    use crate::app::View;
+    use crate::test_utils::{sample_comments, CommentBuilder, TestAppBuilder};
+    use crate::views::tests::render_to_string;
 
     #[test]
     fn test_strip_html_basic_tags() {
@@ -348,5 +351,179 @@ mod tests {
     fn test_strip_html_collapses_whitespace() {
         assert_eq!(strip_html("  too   many    spaces  "), "too many spaces");
         assert_eq!(strip_html("<p>  \n\n  </p>text"), "text");
+    }
+
+    #[test]
+    fn test_comments_view_renders_thread() {
+        let app = TestAppBuilder::new()
+            .with_comments(sample_comments())
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Test Story Title".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .expanded(vec![100]) // Expand first comment to show replies
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_comments_view_depth_indentation() {
+        // Create a deep comment tree to test indentation
+        let comments = vec![
+            CommentBuilder::new()
+                .id(1)
+                .text("Top level comment")
+                .author("user1")
+                .depth(0)
+                .kids(vec![2])
+                .build(),
+            CommentBuilder::new()
+                .id(2)
+                .text("First reply")
+                .author("user2")
+                .depth(1)
+                .kids(vec![3])
+                .build(),
+            CommentBuilder::new()
+                .id(3)
+                .text("Nested reply")
+                .author("user3")
+                .depth(2)
+                .kids(vec![4])
+                .build(),
+            CommentBuilder::new()
+                .id(4)
+                .text("Deep nested")
+                .author("user4")
+                .depth(3)
+                .kids(vec![])
+                .build(),
+        ];
+
+        let app = TestAppBuilder::new()
+            .with_comments(comments)
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Deep Thread".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .expanded(vec![1, 2, 3]) // Expand all to show full thread
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_comments_view_collapsed_state() {
+        let comments = vec![
+            CommentBuilder::new()
+                .id(1)
+                .text("Parent comment with replies")
+                .author("parent")
+                .depth(0)
+                .kids(vec![2, 3])
+                .build(),
+            CommentBuilder::new()
+                .id(2)
+                .text("Hidden reply 1")
+                .author("child1")
+                .depth(1)
+                .build(),
+            CommentBuilder::new()
+                .id(3)
+                .text("Hidden reply 2")
+                .author("child2")
+                .depth(1)
+                .build(),
+        ];
+
+        // Don't expand comment 1, so replies should be hidden
+        let app = TestAppBuilder::new()
+            .with_comments(comments)
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Collapsed Test".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        // Should show [+] indicator and "2 replies" but not the reply text
+        assert!(output.contains("[+]"));
+        assert!(output.contains("2 replies"));
+        // The reply text should not be visible
+        assert!(!output.contains("Hidden reply"));
+    }
+
+    #[test]
+    fn test_comments_view_empty() {
+        let app = TestAppBuilder::new()
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Empty Story".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        assert!(output.contains("No comments yet"));
+    }
+
+    #[test]
+    fn test_comments_view_loading() {
+        let app = TestAppBuilder::new()
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Loading Story".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .loading()
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        assert!(output.contains("Loading"));
+    }
+
+    #[test]
+    fn test_comments_view_error() {
+        let app = TestAppBuilder::new()
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Error Story".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .error("Network error: connection refused")
+            .build();
+
+        let output = render_to_string(80, 24, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        assert!(output.contains("connection refused"));
     }
 }

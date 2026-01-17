@@ -24,3 +24,4 @@ dirs = "5"
 
 [dev-dependencies]
 tokio-test = "0.4"
+insta = "1.40"
