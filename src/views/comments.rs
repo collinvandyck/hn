@@ -196,12 +196,13 @@ fn comment_to_list_item(
 
     // Hide text for collapsed comments with children, but only for nested comments
     if has_children && !is_expanded && depth > 0 {
-        let empty_prefix = build_empty_line_prefix(depth, has_more_at_depth, color);
+        // Don't show own │ since children are hidden
+        let empty_prefix = build_empty_line_prefix(depth, has_more_at_depth, false, color);
         return ListItem::new(vec![meta_line, Line::from(vec![empty_prefix])]);
     }
 
     let text = strip_html(&comment.text);
-    let text_prefix = build_text_prefix(depth, has_more_at_depth, color);
+    let text_prefix = build_text_prefix(depth, has_more_at_depth, has_children, color);
     let prefix_width = text_prefix.content.len();
     let available_width = max_width.saturating_sub(prefix_width).max(20);
     let wrapped_lines = wrap_text(&text, available_width);
@@ -215,7 +216,7 @@ fn comment_to_list_item(
         ]));
     }
 
-    let empty_prefix = build_empty_line_prefix(depth, has_more_at_depth, color);
+    let empty_prefix = build_empty_line_prefix(depth, has_more_at_depth, has_children, color);
     lines.push(Line::from(vec![empty_prefix]));
 
     ListItem::new(lines)
@@ -230,20 +231,25 @@ fn build_meta_tree_prefix(
         return Span::raw("");
     }
 
+    // Each depth level is 4 characters
+    // Format: [ancestor continuation chars] + [connector] + space
     let mut prefix = String::new();
 
+    // Add ancestor continuation (│ or spaces) for depths 1 to depth-1
+    // Each segment is 4 chars: space + (│ or space) + 2 spaces
     for d in 1..depth {
         if has_more_at_depth.get(d).copied().unwrap_or(false) {
-            prefix.push_str("│ ");
+            prefix.push_str(" │  "); // space + │ + 2 spaces = 4 chars
         } else {
-            prefix.push_str("  ");
+            prefix.push_str("    "); // 4 spaces
         }
     }
 
+    // Add connector for current depth (space + connector + space = 4 chars total)
     if has_more_at_depth.get(depth).copied().unwrap_or(false) {
-        prefix.push_str("├─ ");
+        prefix.push_str(" ├─ ");
     } else {
-        prefix.push_str("└─ ");
+        prefix.push_str(" └─ ");
     }
 
     Span::styled(prefix, Style::default().fg(color))
@@ -252,29 +258,30 @@ fn build_meta_tree_prefix(
 fn build_text_prefix(
     depth: usize,
     has_more_at_depth: &[bool],
+    has_children: bool,
     color: ratatui::style::Color,
 ) -> Span<'static> {
-    if depth == 0 {
-        return Span::raw("    ");
-    }
-
+    // Text prefix is (depth + 1) * 4 characters
+    // Format: [ancestor continuation] + [own continuation if has children] + alignment
     let mut prefix = String::new();
 
-    for d in 1..depth {
+    // Add ancestor continuation for depths 1 to depth
+    // Each segment is 4 chars: space + (│ or space) + 2 spaces
+    for d in 1..=depth {
         if has_more_at_depth.get(d).copied().unwrap_or(false) {
-            prefix.push_str("│ ");
+            prefix.push_str(" │  "); // space + │ + 2 spaces = 4 chars
         } else {
-            prefix.push_str("  ");
+            prefix.push_str("    "); // 4 spaces
         }
     }
 
-    if has_more_at_depth.get(depth).copied().unwrap_or(false) {
-        prefix.push_str("│  ");
+    // Add own tree line if has children, otherwise spaces for alignment
+    // This segment is 4 chars to maintain alignment
+    if has_children {
+        prefix.push_str(" │  "); // space + │ + 2 spaces = 4 chars
     } else {
-        prefix.push_str("   ");
+        prefix.push_str("    "); // 4 spaces
     }
-
-    prefix.push_str("    ");
 
     Span::styled(prefix, Style::default().fg(color))
 }
@@ -282,20 +289,26 @@ fn build_text_prefix(
 fn build_empty_line_prefix(
     depth: usize,
     has_more_at_depth: &[bool],
+    has_children: bool,
     color: ratatui::style::Color,
 ) -> Span<'static> {
-    if depth == 0 {
-        return Span::raw("");
-    }
-
+    // Empty line shows tree continuation
+    // │ appears at position (d-1)*4+1 for each depth d where continuation is needed
     let mut prefix = String::new();
 
+    // For depths 1 to depth, add continuation markers
     for d in 1..=depth {
+        // Each depth segment is 4 chars: space + (│ or space) + 2 spaces
         if has_more_at_depth.get(d).copied().unwrap_or(false) {
-            prefix.push_str("│ ");
+            prefix.push_str(" │  ");
         } else {
-            prefix.push_str("  ");
+            prefix.push_str("    ");
         }
+    }
+
+    // Add own tree line if has children (for expanded comments showing text)
+    if has_children {
+        prefix.push_str(" │");
     }
 
     Span::styled(prefix, Style::default().fg(color))

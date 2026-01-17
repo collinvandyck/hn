@@ -8,14 +8,14 @@ Deep Thread
 │▶ [-] user1 · 794d ago · 1 replies                                            │
 │   │  Top level comment                                                       │
 │   │                                                                          │
-│   ├─ [-] user2 · 794d ago · 1 replies                                        │
-│   │      First reply                                                         │
-│   │                                                                          │
-│   └─ [-] user3 · 794d ago · 1 replies                                        │
-│       │  Nested reply                                                        │
+│   └─ [-] user2 · 794d ago · 1 replies                                        │
+│       │  First reply                                                         │
 │       │                                                                      │
-│       └─ [ ] user4 · 794d ago                                                │
-│              Deep nested                                                     │
+│       └─ [-] user3 · 794d ago · 1 replies                                    │
+│           │  Nested reply                                                    │
+│           │                                                                  │
+│           └─ [ ] user4 · 794d ago                                            │
+│                  Deep nested                                                 │
 │                                                                              │
 │                                                                              │
 │                                                                              │
