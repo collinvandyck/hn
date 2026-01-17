@@ -463,21 +463,39 @@ impl App {
             let Some(comment) = self.selected_comment() else {
                 return;
             };
-            let start_depth = comment.depth;
 
-            // Find actual index of selected comment
-            let Some(start_idx) = self.actual_comment_index(self.selected_index) else {
+            // Find the top-level ancestor
+            let mut ancestor_idx = self.selected_index;
+            let mut ancestor_actual_idx = self.actual_comment_index(self.selected_index);
+
+            if comment.depth > 0 {
+                let visible = self.visible_comment_indices();
+                for i in (0..self.selected_index).rev() {
+                    if let Some(&actual_idx) = visible.get(i)
+                        && self.comments[actual_idx].depth == 0
+                    {
+                        ancestor_idx = i;
+                        ancestor_actual_idx = Some(actual_idx);
+                        break;
+                    }
+                }
+            }
+
+            let Some(start_idx) = ancestor_actual_idx else {
                 return;
             };
 
-            // Collapse selected comment and all descendants
+            // Collapse the top-level ancestor and all its descendants
             for i in start_idx..self.comments.len() {
                 let c = &self.comments[i];
-                if i > start_idx && c.depth <= start_depth {
+                if i > start_idx && c.depth == 0 {
                     break;
                 }
                 self.expanded_comments.remove(&c.id);
             }
+
+            // Move cursor to the top-level ancestor
+            self.selected_index = ancestor_idx;
         }
     }
 
