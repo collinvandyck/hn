@@ -7,7 +7,7 @@ pub fn handle_key(key: KeyEvent, app: &App) -> Option<Message> {
     match key.code {
         KeyCode::Char('q') => return Some(Message::Quit),
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            return Some(Message::Quit)
+            return Some(Message::Quit);
         }
         _ => {}
     }
@@ -73,8 +73,8 @@ fn handle_comments_key(key: KeyEvent) -> Option<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::{ThemeVariant, default_for_variant};
     use crossterm::event::KeyEventState;
-    use crate::theme::{default_for_variant, ThemeVariant};
 
     fn make_key(code: KeyCode) -> KeyEvent {
         KeyEvent {

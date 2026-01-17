@@ -1,3 +1,5 @@
 [tools]
 gh = "latest"
-rust = "latest"
+just = "latest"
+lazygit = "latest"
+rust = ["stable", "nightly"]

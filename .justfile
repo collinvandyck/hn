@@ -22,10 +22,10 @@ lint:
     cargo clippy --all --tests -- -D warnings
 
 fmt:
-    cargo fmt
+    cargo +nightly fmt
 
 fmt-check:
-    cargo fmt -- --check
+    cargo +nightly fmt -- --check
 
 build:
     cargo build --release

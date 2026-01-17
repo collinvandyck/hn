@@ -20,8 +20,8 @@ use app::{App, View};
 use cli::{Cli, Commands, OutputFormat, ThemeArgs, ThemeCommands};
 use event::Event;
 use theme::{
-    all_themes, by_name, default_for_variant, detect_terminal_theme, load_theme_file, ResolvedTheme,
-    ThemeVariant,
+    ResolvedTheme, ThemeVariant, all_themes, by_name, default_for_variant, detect_terminal_theme,
+    load_theme_file,
 };
 use tui::EventHandler;
 
@@ -55,8 +55,7 @@ fn handle_theme_command(args: ThemeArgs) -> Result<()> {
             }
         }
         ThemeCommands::Show { name, format } => {
-            let theme = by_name(&name)
-                .with_context(|| format!("Theme '{}' not found", name))?;
+            let theme = by_name(&name).with_context(|| format!("Theme '{}' not found", name))?;
 
             match format {
                 OutputFormat::Toml => {

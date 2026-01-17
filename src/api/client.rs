@@ -58,10 +58,10 @@ impl HnClient {
     async fn fetch_item(&self, id: u64) -> Result<HnItem> {
         {
             let cache = self.item_cache.read().await;
-            if let Some(entry) = cache.get(&id) {
-                if entry.is_fresh() {
-                    return Ok(entry.data.clone());
-                }
+            if let Some(entry) = cache.get(&id)
+                && entry.is_fresh()
+            {
+                return Ok(entry.data.clone());
             }
         }
 

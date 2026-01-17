@@ -4,8 +4,9 @@ use std::time::Instant;
 use crate::api::{Comment, Feed, HnClient, Story};
 use crate::theme::ResolvedTheme;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
+    #[default]
     Stories,
     Comments {
         story_id: u64,
@@ -13,12 +14,6 @@ pub enum View {
         story_index: usize,
         story_scroll: usize,
     },
-}
-
-impl Default for View {
-    fn default() -> Self {
-        View::Stories
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -147,13 +142,12 @@ impl App {
     }
 
     fn expand_comment(&mut self) {
-        if let View::Comments { .. } = self.view {
-            if let Some(comment) = self.selected_comment() {
-                if !comment.kids.is_empty() {
-                    let id = comment.id;
-                    self.expanded_comments.insert(id);
-                }
-            }
+        if let View::Comments { .. } = self.view
+            && let Some(comment) = self.selected_comment()
+            && !comment.kids.is_empty()
+        {
+            let id = comment.id;
+            self.expanded_comments.insert(id);
         }
     }
 
@@ -166,15 +160,14 @@ impl App {
 
             self.expanded_comments.remove(&id);
 
-            // If child comment, move selection to parent
             if depth > 0 && self.selected_index > 0 {
                 let visible = self.visible_comment_indices();
                 for i in (0..self.selected_index).rev() {
-                    if let Some(&actual_idx) = visible.get(i) {
-                        if self.comments[actual_idx].depth < depth {
-                            self.selected_index = i;
-                            return;
-                        }
+                    if let Some(&actual_idx) = visible.get(i)
+                        && self.comments[actual_idx].depth < depth
+                    {
+                        self.selected_index = i;
+                        return;
                     }
                 }
             }
@@ -256,39 +249,44 @@ impl App {
     }
 
     async fn open_comments(&mut self) {
-        if let View::Stories = self.view {
-            if let Some(story) = self.stories.get(self.selected_index).cloned() {
-                let story_index = self.selected_index;
-                let story_scroll = self.scroll_offset;
+        if let View::Stories = self.view
+            && let Some(story) = self.stories.get(self.selected_index).cloned()
+        {
+            let story_index = self.selected_index;
+            let story_scroll = self.scroll_offset;
 
-                self.view = View::Comments {
-                    story_id: story.id,
-                    story_title: story.title.clone(),
-                    story_index,
-                    story_scroll,
-                };
-                self.set_loading(true);
-                self.comments.clear();
-                self.expanded_comments.clear();
-                self.selected_index = 0;
-                self.scroll_offset = 0;
+            self.view = View::Comments {
+                story_id: story.id,
+                story_title: story.title.clone(),
+                story_index,
+                story_scroll,
+            };
+            self.set_loading(true);
+            self.comments.clear();
+            self.expanded_comments.clear();
+            self.selected_index = 0;
+            self.scroll_offset = 0;
 
-                match self.client.fetch_comments_flat(&story, 5).await {
-                    Ok(comments) => {
-                        self.comments = comments;
-                        self.set_loading(false);
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to load comments: {}", e));
-                        self.set_loading(false);
-                    }
+            match self.client.fetch_comments_flat(&story, 5).await {
+                Ok(comments) => {
+                    self.comments = comments;
+                    self.set_loading(false);
+                }
+                Err(e) => {
+                    self.error = Some(format!("Failed to load comments: {}", e));
+                    self.set_loading(false);
                 }
             }
         }
     }
 
     fn go_back(&mut self) {
-        if let View::Comments { story_index, story_scroll, .. } = self.view {
+        if let View::Comments {
+            story_index,
+            story_scroll,
+            ..
+        } = self.view
+        {
             self.view = View::Stories;
             self.comments.clear();
             self.selected_index = story_index;
@@ -360,7 +358,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::{default_for_variant, ThemeVariant};
+    use crate::theme::{ThemeVariant, default_for_variant};
 
     fn test_app() -> App {
         App::new(default_for_variant(ThemeVariant::Dark))

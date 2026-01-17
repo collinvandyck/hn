@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
-    Frame,
 };
 use textwrap;
 
@@ -31,12 +31,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_header(frame: &mut Frame, title: &str, area: Rect, theme: &ResolvedTheme) {
-    let header = Paragraph::new(title)
-        .style(
-            Style::default()
-                .fg(theme.story_title)
-                .add_modifier(Modifier::BOLD),
-        );
+    let header = Paragraph::new(title).style(
+        Style::default()
+            .fg(theme.story_title)
+            .add_modifier(Modifier::BOLD),
+    );
     frame.render_widget(header, area);
 }
 
@@ -46,7 +45,12 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     if app.loading {
         let loading = Paragraph::new("Loading comments...")
             .style(Style::default().fg(theme.warning))
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Comments"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(theme.border))
+                    .title("Comments"),
+            );
         frame.render_widget(loading, area);
         return;
     }
@@ -54,7 +58,12 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     if let Some(err) = &app.error {
         let error = Paragraph::new(err.as_str())
             .style(Style::default().fg(theme.error))
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Error"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(theme.border))
+                    .title("Error"),
+            );
         frame.render_widget(error, area);
         return;
     }
@@ -62,7 +71,12 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     if app.comments.is_empty() {
         let empty = Paragraph::new("No comments yet")
             .style(Style::default().fg(theme.foreground_dim))
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Comments"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(theme.border))
+                    .title("Comments"),
+            );
         frame.render_widget(empty, area);
         return;
     }
@@ -101,7 +115,12 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, area, &mut state);
 }
 
-fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, theme: &ResolvedTheme) -> ListItem<'static> {
+fn comment_to_list_item(
+    comment: &Comment,
+    max_width: usize,
+    is_expanded: bool,
+    theme: &ResolvedTheme,
+) -> ListItem<'static> {
     let color = theme.depth_color(comment.depth);
     let indent_width = comment.depth * 2;
     let indent = " ".repeat(indent_width);
@@ -146,7 +165,10 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, 
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
         Span::styled(" · ", Style::default().fg(theme.foreground_dim)),
-        Span::styled(format_time(comment.time), Style::default().fg(theme.foreground_dim)),
+        Span::styled(
+            format_time(comment.time),
+            Style::default().fg(theme.foreground_dim),
+        ),
     ];
     meta_spans.extend(child_info);
     let meta_line = Line::from(meta_spans);
@@ -164,7 +186,10 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, 
 
     for wrapped_line in wrapped_lines {
         lines.push(Line::from(vec![
-            Span::styled(text_indent.clone(), Style::default().fg(theme.foreground_dim)),
+            Span::styled(
+                text_indent.clone(),
+                Style::default().fg(theme.foreground_dim),
+            ),
             Span::styled(wrapped_line, Style::default().fg(theme.comment_text)),
         ]));
     }
@@ -198,7 +223,9 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let mut spans = vec![
         Span::styled(
             " Comments ",
-            Style::default().bg(theme.status_bar_bg).fg(theme.status_bar_fg),
+            Style::default()
+                .bg(theme.status_bar_bg)
+                .fg(theme.status_bar_fg),
         ),
         Span::raw(" "),
     ];
@@ -271,15 +298,13 @@ fn strip_html(html: &str) -> String {
         .map(|(i, part)| {
             if i == 0 {
                 part.to_string()
+            } else if let Some(start) = part.find('>')
+                && let Some(end) = part.find("</a>")
+            {
+                let link_text = &part[start + 1..end];
+                let rest = &part[end + 4..];
+                format!("{}{}", link_text, rest)
             } else {
-                // Find the link text between > and </a>
-                if let Some(start) = part.find('>') {
-                    if let Some(end) = part.find("</a>") {
-                        let link_text = &part[start + 1..end];
-                        let rest = &part[end + 4..];
-                        return format!("{}{}", link_text, rest);
-                    }
-                }
                 part.to_string()
             }
         })
@@ -297,7 +322,7 @@ fn strip_html(html: &str) -> String {
 mod tests {
     use super::*;
     use crate::app::View;
-    use crate::test_utils::{sample_comments, CommentBuilder, TestAppBuilder};
+    use crate::test_utils::{CommentBuilder, TestAppBuilder, sample_comments};
     use crate::views::tests::render_to_string;
 
     #[test]

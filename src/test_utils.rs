@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use crate::api::{Comment, Feed, HnClient, Story};
 use crate::app::{App, View};
-use crate::theme::{default_for_variant, ResolvedTheme, ThemeVariant};
+use crate::theme::{ResolvedTheme, ThemeVariant, default_for_variant};
 
 #[allow(dead_code)]
 pub struct StoryBuilder {

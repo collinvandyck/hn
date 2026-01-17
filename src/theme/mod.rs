@@ -77,14 +77,14 @@ impl ThemeColor {
 
     fn parse_hex(hex: &str) -> Color {
         let hex = hex.trim_start_matches('#');
-        if hex.len() == 6 {
-            if let (Ok(r), Ok(g), Ok(b)) = (
+        if hex.len() == 6
+            && let (Ok(r), Ok(g), Ok(b)) = (
                 u8::from_str_radix(&hex[0..2], 16),
                 u8::from_str_radix(&hex[2..4], 16),
                 u8::from_str_radix(&hex[4..6], 16),
-            ) {
-                return Color::Rgb(r, g, b);
-            }
+            )
+        {
+            return Color::Rgb(r, g, b);
         }
         Color::Reset
     }
@@ -172,7 +172,11 @@ impl From<Theme> for ResolvedTheme {
             story_comments: c.story_comments.to_color(),
             story_time: c.story_time.to_color(),
             comment_text: c.comment_text.to_color(),
-            comment_depth_colors: c.comment_depth_colors.iter().map(|c| c.to_color()).collect(),
+            comment_depth_colors: c
+                .comment_depth_colors
+                .iter()
+                .map(|c| c.to_color())
+                .collect(),
             status_bar_bg: c.status_bar_bg.to_color(),
             status_bar_fg: c.status_bar_fg.to_color(),
             spinner: c.spinner.to_color(),

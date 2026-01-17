@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
-    Frame,
 };
 
 use crate::api::{Feed, Story};
@@ -37,7 +37,10 @@ fn render_feed_tabs(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(theme.foreground_dim)
             };
             vec![
-                Span::styled(format!("[{}]", i + 1), Style::default().fg(theme.foreground_dim)),
+                Span::styled(
+                    format!("[{}]", i + 1),
+                    Style::default().fg(theme.foreground_dim),
+                ),
                 Span::styled(feed.label(), style),
                 Span::raw("  "),
             ]
@@ -54,7 +57,12 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
     if app.loading {
         let loading = Paragraph::new("Loading...")
             .style(Style::default().fg(theme.warning))
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Stories"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(theme.border))
+                    .title("Stories"),
+            );
         frame.render_widget(loading, area);
         return;
     }
@@ -62,7 +70,12 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
     if let Some(err) = &app.error {
         let error = Paragraph::new(err.as_str())
             .style(Style::default().fg(theme.error))
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Error"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(theme.border))
+                    .title("Error"),
+            );
         frame.render_widget(error, area);
         return;
     }
@@ -75,10 +88,12 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title(format!(
-            "{} Stories",
-            app.feed.label()
-        )))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border))
+                .title(format!("{} Stories", app.feed.label())),
+        )
         .highlight_style(
             Style::default()
                 .bg(theme.selection_bg)
@@ -140,7 +155,9 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let mut spans = vec![
         Span::styled(
             format!(" {} ", app.feed.label()),
-            Style::default().bg(theme.status_bar_bg).fg(theme.status_bar_fg),
+            Style::default()
+                .bg(theme.status_bar_bg)
+                .fg(theme.status_bar_fg),
         ),
         Span::raw(" "),
     ];
@@ -190,7 +207,7 @@ fn format_time(timestamp: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{sample_stories, TestAppBuilder};
+    use crate::test_utils::{TestAppBuilder, sample_stories};
     use crate::views::tests::render_to_string;
 
     #[test]
@@ -223,9 +240,7 @@ mod tests {
 
     #[test]
     fn test_stories_view_loading_state() {
-        let app = TestAppBuilder::new()
-            .loading()
-            .build();
+        let app = TestAppBuilder::new().loading().build();
 
         let output = render_to_string(80, 24, |frame| {
             render(frame, &app, frame.area());

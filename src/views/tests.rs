@@ -1,7 +1,7 @@
-use ratatui::backend::TestBackend;
-use ratatui::buffer::Buffer;
 use ratatui::Frame;
 use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
 
 pub fn render_to_string<F>(width: u16, height: u16, render_fn: F) -> String
 where
@@ -23,14 +23,14 @@ fn buffer_to_string(buffer: &Buffer) -> String {
         }
         lines.push(line.trim_end().to_string());
     }
-    while lines.last().map_or(false, |l| l.is_empty()) {
+    while lines.last().is_some_and(|l| l.is_empty()) {
         lines.pop();
     }
     lines.join("\n")
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
     use ratatui::widgets::Paragraph;
 

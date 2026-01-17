@@ -199,7 +199,7 @@ mod tests {
         // Test wraparound math (same logic as cycle_feed)
         let wrap = |idx: i32, len: i32| idx.rem_euclid(len) as usize;
         assert_eq!(wrap(-1, 6), 5); // Before first -> last
-        assert_eq!(wrap(6, 6), 0);  // After last -> first
+        assert_eq!(wrap(6, 6), 0); // After last -> first
     }
 
     #[test]
