@@ -67,6 +67,7 @@ pub enum Message {
     SwitchFeed(Feed),
     NextFeed,
     PrevFeed,
+    UpdateViewportHeight(u16),
 }
 
 pub struct App {
@@ -96,6 +97,8 @@ pub struct App {
     pub running_tasks: Vec<TaskInfo>,
     pub debug_log: VecDeque<LogEntry>,
     pub next_task_id: u64,
+    // Viewport tracking for dynamic story loading
+    pub viewport_height: Option<u16>,
 }
 
 impl App {
@@ -126,6 +129,7 @@ impl App {
             running_tasks: Vec::new(),
             debug_log: VecDeque::new(),
             next_task_id: 0,
+            viewport_height: None,
         }
     }
 
@@ -201,6 +205,9 @@ impl App {
                         self.set_loading(false);
                         self.selected_index = 0;
                         self.scroll_offset = 0;
+                        if self.should_fill_viewport() {
+                            self.load_more();
+                        }
                     }
                     Err(e) => {
                         self.error = Some(format!("Failed to load stories: {}", e));
@@ -234,6 +241,9 @@ impl App {
                             self.current_page += 1;
                         }
                         self.loading_more = false;
+                        if self.should_fill_viewport() {
+                            self.load_more();
+                        }
                     }
                     Err(e) => {
                         self.error = Some(format!("Failed to load more: {}", e));
@@ -312,6 +322,13 @@ impl App {
             Message::SwitchFeed(feed) => self.switch_feed(feed),
             Message::NextFeed => self.cycle_feed(1),
             Message::PrevFeed => self.cycle_feed(-1),
+            Message::UpdateViewportHeight(height) => {
+                let old_height = self.viewport_height;
+                self.viewport_height = Some(height);
+                if old_height.is_none_or(|h| height > h) && self.should_fill_viewport() {
+                    self.load_more();
+                }
+            }
         }
     }
 
@@ -625,6 +642,24 @@ impl App {
             && self.selected_index + THRESHOLD >= self.stories.len()
     }
 
+    pub fn visible_story_capacity(&self) -> usize {
+        const LAYOUT_OVERHEAD: u16 = 4; // 1 tabs + 1 status bar + 2 borders
+        const STORY_HEIGHT: u16 = 2; // title + metadata
+
+        self.viewport_height
+            .map(|h| (h.saturating_sub(LAYOUT_OVERHEAD) / STORY_HEIGHT) as usize)
+            .unwrap_or(0)
+    }
+
+    fn should_fill_viewport(&self) -> bool {
+        matches!(self.view, View::Stories)
+            && !self.loading
+            && !self.loading_more
+            && self.has_more
+            && !self.stories.is_empty()
+            && self.stories.len() < self.visible_story_capacity()
+    }
+
     fn load_more(&mut self) {
         if self.loading_more || !self.has_more {
             return;
@@ -658,6 +693,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{StoryBuilder, TestAppBuilder, sample_stories};
     use crate::theme::{ThemeVariant, default_for_variant};
 
     fn test_app() -> App {
@@ -723,5 +759,135 @@ mod tests {
         assert_eq!(app.view, View::Stories);
         assert_eq!(app.selected_index, 5);
         assert_eq!(app.scroll_offset, 10);
+    }
+
+    #[test]
+    fn visible_story_capacity_with_no_viewport() {
+        let app = TestAppBuilder::new().build();
+        assert_eq!(app.visible_story_capacity(), 0);
+    }
+
+    #[test]
+    fn visible_story_capacity_with_small_terminal() {
+        // 24 lines: (24 - 4) / 2 = 10 stories
+        let app = TestAppBuilder::new().viewport_height(24).build();
+        assert_eq!(app.visible_story_capacity(), 10);
+    }
+
+    #[test]
+    fn visible_story_capacity_with_large_terminal() {
+        // 80 lines: (80 - 4) / 2 = 38 stories
+        let app = TestAppBuilder::new().viewport_height(80).build();
+        assert_eq!(app.visible_story_capacity(), 38);
+    }
+
+    #[test]
+    fn visible_story_capacity_with_minimum_height() {
+        // 4 lines (just overhead): (4 - 4) / 2 = 0 stories
+        let app = TestAppBuilder::new().viewport_height(4).build();
+        assert_eq!(app.visible_story_capacity(), 0);
+    }
+
+    #[test]
+    fn should_fill_viewport_when_stories_below_capacity() {
+        let stories = sample_stories(); // 5 stories
+        let app = TestAppBuilder::new()
+            .with_stories(stories)
+            .viewport_height(50) // capacity = 23
+            .has_more(true)
+            .build();
+        assert!(app.should_fill_viewport());
+    }
+
+    #[test]
+    fn should_not_fill_viewport_when_stories_at_capacity() {
+        let stories: Vec<_> = (0..25).map(|i| StoryBuilder::new().id(i).build()).collect();
+        let app = TestAppBuilder::new()
+            .with_stories(stories) // 25 stories
+            .viewport_height(50) // capacity = 23
+            .has_more(true)
+            .build();
+        assert!(!app.should_fill_viewport());
+    }
+
+    #[test]
+    fn should_not_fill_viewport_when_no_more_stories() {
+        let stories = sample_stories();
+        let app = TestAppBuilder::new()
+            .with_stories(stories)
+            .viewport_height(50)
+            .has_more(false)
+            .build();
+        assert!(!app.should_fill_viewport());
+    }
+
+    #[test]
+    fn should_not_fill_viewport_when_loading() {
+        let stories = sample_stories();
+        let app = TestAppBuilder::new()
+            .with_stories(stories)
+            .viewport_height(50)
+            .has_more(true)
+            .loading()
+            .build();
+        assert!(!app.should_fill_viewport());
+    }
+
+    #[test]
+    fn should_not_fill_viewport_when_loading_more() {
+        let stories = sample_stories();
+        let app = TestAppBuilder::new()
+            .with_stories(stories)
+            .viewport_height(50)
+            .has_more(true)
+            .loading_more(true)
+            .build();
+        assert!(!app.should_fill_viewport());
+    }
+
+    #[test]
+    fn should_not_fill_viewport_in_comments_view() {
+        let stories = sample_stories();
+        let app = TestAppBuilder::new()
+            .with_stories(stories)
+            .viewport_height(50)
+            .has_more(true)
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Test".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .build();
+        assert!(!app.should_fill_viewport());
+    }
+
+    #[tokio::test]
+    async fn update_viewport_height_triggers_load_when_needed() {
+        let stories = sample_stories(); // 5 stories
+        let mut app = TestAppBuilder::new()
+            .with_stories(stories)
+            .has_more(true)
+            .build();
+
+        app.update(Message::UpdateViewportHeight(50)); // capacity = 23
+
+        assert_eq!(app.viewport_height, Some(50));
+        assert!(app.loading_more); // should have triggered load_more
+    }
+
+    #[test]
+    fn update_viewport_height_no_load_when_shrinking() {
+        let stories = sample_stories();
+        let mut app = TestAppBuilder::new()
+            .with_stories(stories)
+            .viewport_height(50)
+            .has_more(true)
+            .build();
+
+        app.update(Message::UpdateViewportHeight(24)); // shrink
+
+        assert_eq!(app.viewport_height, Some(24));
+        assert!(!app.loading_more); // should NOT trigger load
     }
 }

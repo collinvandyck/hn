@@ -188,6 +188,7 @@ pub struct TestAppBuilder {
     scroll_offset: usize,
     theme: ResolvedTheme,
     debug_visible: bool,
+    viewport_height: Option<u16>,
 }
 
 impl Default for TestAppBuilder {
@@ -216,6 +217,7 @@ impl TestAppBuilder {
             scroll_offset: 0,
             theme: default_for_variant(ThemeVariant::Dark),
             debug_visible: false,
+            viewport_height: None,
         }
     }
 
@@ -275,6 +277,21 @@ impl TestAppBuilder {
         self
     }
 
+    pub fn viewport_height(mut self, height: u16) -> Self {
+        self.viewport_height = Some(height);
+        self
+    }
+
+    pub fn loading_more(mut self, loading: bool) -> Self {
+        self.loading_more = loading;
+        self
+    }
+
+    pub fn has_more(mut self, has_more: bool) -> Self {
+        self.has_more = has_more;
+        self
+    }
+
     pub fn build(self) -> App {
         let (result_tx, result_rx) = mpsc::channel(10);
         App {
@@ -302,6 +319,7 @@ impl TestAppBuilder {
             running_tasks: Vec::new(),
             debug_log: VecDeque::new(),
             next_task_id: 0,
+            viewport_height: self.viewport_height,
         }
     }
 }

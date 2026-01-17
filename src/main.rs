@@ -16,7 +16,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use ratatui::Frame;
 
-use app::{App, View};
+use app::{App, Message, View};
 use cli::{Cli, Commands, OutputFormat, ThemeArgs, ThemeCommands};
 use event::Event;
 use theme::{
@@ -123,15 +123,27 @@ async fn run_tui(cli: Cli) -> Result<()> {
     let mut terminal = tui::init()?;
     let mut app = App::new(resolved_theme);
     let mut events = EventHandler::new(250);
+    let mut last_height: Option<u16> = None;
 
     app.load_stories();
 
     loop {
         terminal.draw(|frame| render(&app, frame))?;
 
+        // Track viewport height changes for dynamic story loading
+        let current_height = terminal.size()?.height;
+        if last_height != Some(current_height) {
+            last_height = Some(current_height);
+            app.update(Message::UpdateViewportHeight(current_height));
+        }
+
         // Poll async results (non-blocking)
         while let Ok(result) = app.result_rx.try_recv() {
             app.handle_async_result(result);
+        }
+
+        if app.should_quit {
+            break;
         }
 
         match events.next().await? {
@@ -141,10 +153,6 @@ async fn run_tui(cli: Cli) -> Result<()> {
                 }
             }
             Event::Tick | Event::Resize | Event::Mouse => {}
-        }
-
-        if app.should_quit {
-            break;
         }
     }
 
