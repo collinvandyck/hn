@@ -140,6 +140,24 @@ impl Feed {
 mod tests {
     use super::*;
 
+    fn make_item(text: Option<&str>, deleted: bool, dead: bool) -> HnItem {
+        HnItem {
+            id: 1,
+            item_type: Some("comment".to_string()),
+            by: Some("testuser".to_string()),
+            time: Some(1234567890),
+            text: text.map(String::from),
+            url: None,
+            score: None,
+            title: None,
+            descendants: None,
+            kids: vec![],
+            parent: Some(0),
+            deleted: if deleted { Some(true) } else { None },
+            dead: if dead { Some(true) } else { None },
+        }
+    }
+
     #[test]
     fn test_story_domain_extraction() {
         let story = Story {
@@ -174,5 +192,51 @@ mod tests {
     fn test_feed_endpoints() {
         assert_eq!(Feed::Top.endpoint(), "topstories");
         assert_eq!(Feed::Ask.endpoint(), "askstories");
+    }
+
+    #[test]
+    fn test_feed_cycling() {
+        let feeds = Feed::all();
+        assert_eq!(feeds[0], Feed::Top);
+        assert_eq!(feeds[feeds.len() - 1], Feed::Jobs);
+
+        // Test wraparound math (same logic as cycle_feed)
+        let wrap = |idx: i32, len: i32| idx.rem_euclid(len) as usize;
+        assert_eq!(wrap(-1, 6), 5); // Before first -> last
+        assert_eq!(wrap(6, 6), 0);  // After last -> first
+    }
+
+    #[test]
+    fn test_comment_from_valid_item() {
+        let item = make_item(Some("Hello world"), false, false);
+        let comment = Comment::from_item(item, 2).unwrap();
+        assert_eq!(comment.by, "testuser");
+        assert_eq!(comment.depth, 2);
+        assert!(comment.text.contains("Hello world"));
+    }
+
+    #[test]
+    fn test_comment_skips_deleted() {
+        let item = make_item(Some("Hello"), true, false);
+        assert!(Comment::from_item(item, 0).is_none());
+    }
+
+    #[test]
+    fn test_comment_skips_dead() {
+        let item = make_item(Some("Hello"), false, true);
+        assert!(Comment::from_item(item, 0).is_none());
+    }
+
+    #[test]
+    fn test_comment_skips_empty_text() {
+        let item = make_item(None, false, false);
+        assert!(Comment::from_item(item, 0).is_none());
+    }
+
+    #[test]
+    fn test_comment_decodes_html_entities() {
+        let item = make_item(Some("&lt;script&gt; &amp; &quot;test&quot;"), false, false);
+        let comment = Comment::from_item(item, 0).unwrap();
+        assert_eq!(comment.text, "<script> & \"test\"");
     }
 }

@@ -258,3 +258,40 @@ fn strip_html(html: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::strip_html;
+
+    #[test]
+    fn test_strip_html_basic_tags() {
+        assert_eq!(strip_html("<p>Hello</p><p>World</p>"), "Hello World");
+        assert_eq!(strip_html("Line1<br>Line2"), "Line1 Line2");
+    }
+
+    #[test]
+    fn test_strip_html_formatting() {
+        assert_eq!(strip_html("<i>italic</i>"), "_italic_");
+        assert_eq!(strip_html("<b>bold</b>"), "*bold*");
+        assert_eq!(strip_html("<code>code</code>"), "`code`");
+    }
+
+    #[test]
+    fn test_strip_html_entities() {
+        assert_eq!(strip_html("&lt;tag&gt;"), "<tag>");
+        assert_eq!(strip_html("&amp;&quot;&#x27;"), "&\"'");
+        assert_eq!(strip_html("path&#x2F;to&#x2F;file"), "path/to/file");
+    }
+
+    #[test]
+    fn test_strip_html_links() {
+        let html = r#"Check <a href="https://example.com">this link</a> out"#;
+        assert_eq!(strip_html(html), "Check this link out");
+    }
+
+    #[test]
+    fn test_strip_html_collapses_whitespace() {
+        assert_eq!(strip_html("  too   many    spaces  "), "too many spaces");
+        assert_eq!(strip_html("<p>  \n\n  </p>text"), "text");
+    }
+}

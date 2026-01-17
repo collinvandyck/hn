@@ -126,9 +126,9 @@ fn story_to_list_item(story: &Story, rank: usize) -> ListItem<'static> {
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let help_text = if app.show_help {
-        "j/k:nav  g/G:top/bottom  o:open  l:comments  c:HN comments  1-6:feeds  r:refresh  q:quit  ?:hide"
+        "j/k:nav  g/G:top/bottom  H/L:feeds  o:open  l:comments  c:HN  1-6:feeds  r:refresh  q:quit  ?:hide"
     } else {
-        "?:help  q:quit"
+        "H/L:feeds  ?:help  q:quit"
     };
 
     let status = Line::from(vec![

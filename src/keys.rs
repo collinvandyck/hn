@@ -42,6 +42,8 @@ fn handle_stories_key(key: KeyEvent) -> Option<Message> {
         KeyCode::Char('r') => Some(Message::Refresh),
 
         // Feed switching
+        KeyCode::Char('H') => Some(Message::PrevFeed),
+        KeyCode::Char('L') => Some(Message::NextFeed),
         KeyCode::Char('1') => Some(Message::SwitchFeed(Feed::Top)),
         KeyCode::Char('2') => Some(Message::SwitchFeed(Feed::New)),
         KeyCode::Char('3') => Some(Message::SwitchFeed(Feed::Best)),
@@ -129,6 +131,19 @@ mod tests {
         assert!(matches!(
             handle_key(make_key(KeyCode::Char('4')), &app),
             Some(Message::SwitchFeed(Feed::Ask))
+        ));
+    }
+
+    #[test]
+    fn test_feed_cycle_keys() {
+        let app = App::default();
+        assert!(matches!(
+            handle_key(make_key(KeyCode::Char('H')), &app),
+            Some(Message::PrevFeed)
+        ));
+        assert!(matches!(
+            handle_key(make_key(KeyCode::Char('L')), &app),
+            Some(Message::NextFeed)
         ));
     }
 }

@@ -35,6 +35,8 @@ pub enum Message {
 
     // Feed switching
     SwitchFeed(Feed),
+    NextFeed,
+    PrevFeed,
 }
 
 /// Application state
@@ -95,6 +97,8 @@ impl App {
             Message::Refresh => self.refresh().await,
             Message::ToggleHelp => self.show_help = !self.show_help,
             Message::SwitchFeed(feed) => self.switch_feed(feed).await,
+            Message::NextFeed => self.cycle_feed(1).await,
+            Message::PrevFeed => self.cycle_feed(-1).await,
         }
     }
 
@@ -226,6 +230,13 @@ impl App {
             self.view = View::Stories;
             self.load_stories().await;
         }
+    }
+
+    async fn cycle_feed(&mut self, direction: i32) {
+        let feeds = Feed::all();
+        let current_idx = feeds.iter().position(|&f| f == self.feed).unwrap_or(0);
+        let new_idx = (current_idx as i32 + direction).rem_euclid(feeds.len() as i32) as usize;
+        self.switch_feed(feeds[new_idx]).await;
     }
 
     /// Load stories for the current feed
