@@ -24,8 +24,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_feed_tabs(frame: &mut Frame, app: &App, area: Rect) {
+    use super::spinner::spinner_frame;
+
     let theme = &app.theme;
-    let tabs: Vec<Span> = Feed::all()
+    let mut spans: Vec<Span> = Feed::all()
         .iter()
         .enumerate()
         .flat_map(|(i, feed)| {
@@ -47,25 +49,19 @@ fn render_feed_tabs(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let tabs_line = Line::from(tabs);
+    if app.should_show_spinner() {
+        spans.push(Span::styled(
+            spinner_frame(app.loading_start),
+            Style::default().fg(theme.spinner),
+        ));
+    }
+
+    let tabs_line = Line::from(spans);
     frame.render_widget(Paragraph::new(tabs_line), area);
 }
 
 fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.theme;
-
-    if app.loading {
-        let loading = Paragraph::new("Loading...")
-            .style(Style::default().fg(theme.warning))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(theme.border))
-                    .title("Stories"),
-            );
-        frame.render_widget(loading, area);
-        return;
-    }
 
     if let Some(err) = &app.error {
         let error = Paragraph::new(err.as_str())
@@ -143,16 +139,14 @@ fn story_to_list_item(story: &Story, rank: usize, theme: &ResolvedTheme) -> List
 }
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
-    use super::spinner::spinner_frame;
-
     let theme = &app.theme;
     let help_text = if app.show_help {
-        "j/k:nav  g/G:top/bottom  H/L:feeds  o:open  l:comments  c:HN  1-6:feeds  r:refresh  q:quit  ?:hide"
+        "j/k:nav  g/G:top/bottom  H/L:feeds  o:open  l:comments  c:HN  1-6:feeds  r:refresh  `:debug  q:quit  ?:hide"
     } else {
         "H/L:feeds  ?:help  q:quit"
     };
 
-    let mut spans = vec![
+    let spans = vec![
         Span::styled(
             format!(" {} ", app.feed.label()),
             Style::default()
@@ -160,24 +154,13 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
                 .fg(theme.status_bar_fg),
         ),
         Span::raw(" "),
-    ];
-
-    if app.loading {
-        spans.push(Span::styled(
-            format!("{} Loading... ", spinner_frame(app.loading_start)),
-            Style::default().fg(theme.spinner),
-        ));
-        spans.push(Span::raw("| "));
-    }
-
-    spans.extend([
         Span::styled(
             format!("{}/{}", app.selected_index + 1, app.stories.len()),
             Style::default().fg(theme.foreground_dim),
         ),
         Span::raw(" | "),
         Span::styled(help_text, Style::default().fg(theme.foreground_dim)),
-    ]);
+    ];
 
     let status = Line::from(spans);
     frame.render_widget(Paragraph::new(status), area);
@@ -236,17 +219,6 @@ mod tests {
         });
 
         insta::assert_snapshot!(output);
-    }
-
-    #[test]
-    fn test_stories_view_loading_state() {
-        let app = TestAppBuilder::new().loading().build();
-
-        let output = render_to_string(80, 24, |frame| {
-            render(frame, &app, frame.area());
-        });
-
-        assert!(output.contains("Loading"));
     }
 
     #[test]

@@ -1,7 +1,9 @@
 //! Test data builders for view testing.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::time::Instant;
+
+use tokio::sync::mpsc;
 
 use crate::api::{Comment, Feed, HnClient, Story};
 use crate::app::{App, View};
@@ -185,6 +187,7 @@ pub struct TestAppBuilder {
     show_help: bool,
     scroll_offset: usize,
     theme: ResolvedTheme,
+    debug_visible: bool,
 }
 
 impl Default for TestAppBuilder {
@@ -212,6 +215,7 @@ impl TestAppBuilder {
             show_help: false,
             scroll_offset: 0,
             theme: default_for_variant(ThemeVariant::Dark),
+            debug_visible: false,
         }
     }
 
@@ -272,6 +276,7 @@ impl TestAppBuilder {
     }
 
     pub fn build(self) -> App {
+        let (result_tx, result_rx) = mpsc::channel(10);
         App {
             view: self.view,
             feed: self.feed,
@@ -290,6 +295,13 @@ impl TestAppBuilder {
             client: HnClient::new(),
             scroll_offset: self.scroll_offset,
             theme: self.theme,
+            result_tx,
+            result_rx,
+            generation: 0,
+            debug_visible: self.debug_visible,
+            running_tasks: Vec::new(),
+            debug_log: VecDeque::new(),
+            next_task_id: 0,
         }
     }
 }

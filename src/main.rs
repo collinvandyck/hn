@@ -124,15 +124,20 @@ async fn run_tui(cli: Cli) -> Result<()> {
     let mut app = App::new(resolved_theme);
     let mut events = EventHandler::new(250);
 
-    app.load_stories().await;
+    app.load_stories();
 
     loop {
         terminal.draw(|frame| render(&app, frame))?;
 
+        // Poll async results (non-blocking)
+        while let Ok(result) = app.result_rx.try_recv() {
+            app.handle_async_result(result);
+        }
+
         match events.next().await? {
             Event::Key(key) => {
                 if let Some(msg) = keys::handle_key(key, &app) {
-                    app.update(msg).await;
+                    app.update(msg);
                 }
             }
             Event::Tick | Event::Resize | Event::Mouse => {}
@@ -148,10 +153,28 @@ async fn run_tui(cli: Cli) -> Result<()> {
 }
 
 fn render(app: &App, frame: &mut Frame) {
+    use ratatui::layout::{Constraint, Layout};
+
     let area = frame.area();
 
+    // Split area for debug pane if visible
+    let (main_area, debug_area) = if app.debug_visible {
+        let chunks = Layout::vertical([
+            Constraint::Min(0),     // Main content
+            Constraint::Length(10), // Debug pane
+        ])
+        .split(area);
+        (chunks[0], Some(chunks[1]))
+    } else {
+        (area, None)
+    };
+
     match &app.view {
-        View::Stories => views::stories::render(frame, app, area),
-        View::Comments { .. } => views::comments::render(frame, app, area),
+        View::Stories => views::stories::render(frame, app, main_area),
+        View::Comments { .. } => views::comments::render(frame, app, main_area),
+    }
+
+    if let Some(debug_area) = debug_area {
+        views::debug::render(frame, app, debug_area);
     }
 }

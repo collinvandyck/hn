@@ -1,8 +1,38 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::time::Instant;
+
+use tokio::sync::mpsc;
 
 use crate::api::{Comment, Feed, HnClient, Story};
 use crate::theme::ResolvedTheme;
+
+pub enum AsyncResult {
+    StoriesLoaded {
+        generation: u64,
+        task_id: u64,
+        result: Result<Vec<Story>, String>,
+    },
+    MoreStoriesLoaded {
+        generation: u64,
+        task_id: u64,
+        result: Result<Vec<Story>, String>,
+    },
+    CommentsLoaded {
+        story_id: u64,
+        task_id: u64,
+        result: Result<Vec<Comment>, String>,
+    },
+}
+
+pub struct TaskInfo {
+    pub id: u64,
+    pub description: String,
+    pub started_at: Instant,
+}
+
+pub struct LogEntry {
+    pub message: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
@@ -33,6 +63,7 @@ pub enum Message {
     Quit,
     Refresh,
     ToggleHelp,
+    ToggleDebug,
     SwitchFeed(Feed),
     NextFeed,
     PrevFeed,
@@ -56,10 +87,20 @@ pub struct App {
     pub client: HnClient,
     pub scroll_offset: usize,
     pub theme: ResolvedTheme,
+    // Async task management
+    pub result_tx: mpsc::Sender<AsyncResult>,
+    pub result_rx: mpsc::Receiver<AsyncResult>,
+    pub generation: u64,
+    // Debug pane
+    pub debug_visible: bool,
+    pub running_tasks: Vec<TaskInfo>,
+    pub debug_log: VecDeque<LogEntry>,
+    pub next_task_id: u64,
 }
 
 impl App {
     pub fn new(theme: ResolvedTheme) -> Self {
+        let (result_tx, result_rx) = mpsc::channel(10);
         Self {
             view: View::default(),
             feed: Feed::default(),
@@ -78,22 +119,169 @@ impl App {
             client: HnClient::new(),
             scroll_offset: 0,
             theme,
+            result_tx,
+            result_rx,
+            generation: 0,
+            debug_visible: false,
+            running_tasks: Vec::new(),
+            debug_log: VecDeque::new(),
+            next_task_id: 0,
         }
     }
 
     fn set_loading(&mut self, loading: bool) {
         self.loading = loading;
-        self.loading_start = if loading { Some(Instant::now()) } else { None };
+        if loading {
+            self.loading_start = Some(Instant::now());
+        }
+        // Don't clear loading_start when done - used for minimum spinner duration
     }
 
-    pub async fn update(&mut self, msg: Message) {
+    pub fn should_show_spinner(&self) -> bool {
+        const MIN_SPINNER_DURATION: std::time::Duration = std::time::Duration::from_millis(500);
+        if let Some(start) = self.loading_start {
+            self.loading || start.elapsed() < MIN_SPINNER_DURATION
+        } else {
+            false
+        }
+    }
+
+    pub fn log_debug(&mut self, msg: impl Into<String>) {
+        self.debug_log.push_back(LogEntry {
+            message: msg.into(),
+        });
+        if self.debug_log.len() > 50 {
+            self.debug_log.pop_front();
+        }
+    }
+
+    fn start_task(&mut self, description: impl Into<String>) -> u64 {
+        let id = self.next_task_id;
+        self.next_task_id += 1;
+        let desc = description.into();
+        self.log_debug(format!("Started: {}", desc));
+        self.running_tasks.push(TaskInfo {
+            id,
+            description: desc,
+            started_at: Instant::now(),
+        });
+        id
+    }
+
+    fn end_task(&mut self, id: u64, outcome: &str) {
+        if let Some(pos) = self.running_tasks.iter().position(|t| t.id == id) {
+            let task = self.running_tasks.remove(pos);
+            let elapsed = task.started_at.elapsed();
+            self.log_debug(format!("{} {}: {:.2?}", task.description, outcome, elapsed));
+        }
+    }
+
+    pub fn handle_async_result(&mut self, result: AsyncResult) {
+        match result {
+            AsyncResult::StoriesLoaded {
+                generation,
+                task_id,
+                result,
+            } => {
+                if generation != self.generation {
+                    self.end_task(task_id, "discarded (stale)");
+                    return;
+                }
+                self.end_task(
+                    task_id,
+                    if result.is_ok() {
+                        "completed"
+                    } else {
+                        "failed"
+                    },
+                );
+                match result {
+                    Ok(stories) => {
+                        self.stories = stories;
+                        self.set_loading(false);
+                        self.selected_index = 0;
+                        self.scroll_offset = 0;
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to load stories: {}", e));
+                        self.set_loading(false);
+                    }
+                }
+            }
+            AsyncResult::MoreStoriesLoaded {
+                generation,
+                task_id,
+                result,
+            } => {
+                if generation != self.generation {
+                    self.end_task(task_id, "discarded (stale)");
+                    return;
+                }
+                self.end_task(
+                    task_id,
+                    if result.is_ok() {
+                        "completed"
+                    } else {
+                        "failed"
+                    },
+                );
+                match result {
+                    Ok(stories) => {
+                        if stories.is_empty() {
+                            self.has_more = false;
+                        } else {
+                            self.stories.extend(stories);
+                            self.current_page += 1;
+                        }
+                        self.loading_more = false;
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to load more: {}", e));
+                        self.loading_more = false;
+                    }
+                }
+            }
+            AsyncResult::CommentsLoaded {
+                story_id,
+                task_id,
+                result,
+            } => {
+                let is_current =
+                    matches!(&self.view, View::Comments { story_id: id, .. } if *id == story_id);
+                if !is_current {
+                    self.end_task(task_id, "discarded (wrong view)");
+                    return;
+                }
+                self.end_task(
+                    task_id,
+                    if result.is_ok() {
+                        "completed"
+                    } else {
+                        "failed"
+                    },
+                );
+                match result {
+                    Ok(comments) => {
+                        self.comments = comments;
+                        self.set_loading(false);
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to load comments: {}", e));
+                        self.set_loading(false);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn update(&mut self, msg: Message) {
         self.error = None;
 
         match msg {
             Message::SelectNext => {
                 self.select_next();
                 if self.should_load_more() {
-                    self.load_more().await;
+                    self.load_more();
                 }
             }
             Message::SelectPrev => self.select_prev(),
@@ -101,28 +289,29 @@ impl App {
             Message::SelectLast => {
                 self.select_last();
                 if self.should_load_more() {
-                    self.load_more().await;
+                    self.load_more();
                 }
             }
             Message::PageDown => {
                 self.page_down();
                 if self.should_load_more() {
-                    self.load_more().await;
+                    self.load_more();
                 }
             }
             Message::PageUp => self.page_up(),
             Message::OpenUrl => self.open_url(),
-            Message::OpenComments => self.open_comments().await,
+            Message::OpenComments => self.open_comments(),
             Message::OpenCommentsUrl => self.open_comments_url(),
             Message::ExpandComment => self.expand_comment(),
             Message::CollapseComment => self.collapse_comment(),
             Message::Back => self.go_back(),
             Message::Quit => self.should_quit = true,
-            Message::Refresh => self.refresh().await,
+            Message::Refresh => self.refresh(),
             Message::ToggleHelp => self.show_help = !self.show_help,
-            Message::SwitchFeed(feed) => self.switch_feed(feed).await,
-            Message::NextFeed => self.cycle_feed(1).await,
-            Message::PrevFeed => self.cycle_feed(-1).await,
+            Message::ToggleDebug => self.debug_visible = !self.debug_visible,
+            Message::SwitchFeed(feed) => self.switch_feed(feed),
+            Message::NextFeed => self.cycle_feed(1),
+            Message::PrevFeed => self.cycle_feed(-1),
         }
     }
 
@@ -269,15 +458,16 @@ impl App {
         }
     }
 
-    async fn open_comments(&mut self) {
+    fn open_comments(&mut self) {
         if let View::Stories = self.view
             && let Some(story) = self.stories.get(self.selected_index).cloned()
         {
             let story_index = self.selected_index;
             let story_scroll = self.scroll_offset;
+            let story_id = story.id;
 
             self.view = View::Comments {
-                story_id: story.id,
+                story_id,
                 story_title: story.title.clone(),
                 story_index,
                 story_scroll,
@@ -288,16 +478,23 @@ impl App {
             self.selected_index = 0;
             self.scroll_offset = 0;
 
-            match self.client.fetch_comments_flat(&story, 5).await {
-                Ok(comments) => {
-                    self.comments = comments;
-                    self.set_loading(false);
-                }
-                Err(e) => {
-                    self.error = Some(format!("Failed to load comments: {}", e));
-                    self.set_loading(false);
-                }
-            }
+            let task_id = self.start_task(format!("Load comments for {}", story_id));
+            let client = self.client.clone();
+            let tx = self.result_tx.clone();
+
+            tokio::spawn(async move {
+                let result = client
+                    .fetch_comments_flat(&story, 5)
+                    .await
+                    .map_err(|e| e.to_string());
+                let _ = tx
+                    .send(AsyncResult::CommentsLoaded {
+                        story_id,
+                        task_id,
+                        result,
+                    })
+                    .await;
+            });
         }
     }
 
@@ -315,66 +512,107 @@ impl App {
         }
     }
 
-    async fn refresh(&mut self) {
-        self.client.clear_cache().await;
-
+    fn refresh(&mut self) {
         match &self.view {
             View::Stories => {
-                self.load_stories().await;
+                // Clear cache and reload stories (keep existing stories visible during load)
+                let client = self.client.clone();
+                let feed = self.feed;
+                let tx = self.result_tx.clone();
+
+                self.generation += 1;
+                self.set_loading(true);
+                self.current_page = 0;
+                self.has_more = true;
+
+                let generation = self.generation;
+                let task_id = self.start_task(format!("Refresh {} stories", feed.label()));
+
+                tokio::spawn(async move {
+                    client.clear_cache().await;
+                    let result = client
+                        .fetch_stories(feed, 0)
+                        .await
+                        .map_err(|e| e.to_string());
+                    let _ = tx
+                        .send(AsyncResult::StoriesLoaded {
+                            generation,
+                            task_id,
+                            result,
+                        })
+                        .await;
+                });
             }
             View::Comments { story_id, .. } => {
                 let story_id = *story_id;
                 if let Some(story) = self.stories.iter().find(|s| s.id == story_id).cloned() {
                     self.set_loading(true);
-                    match self.client.fetch_comments_flat(&story, 5).await {
-                        Ok(comments) => {
-                            self.comments = comments;
-                            self.set_loading(false);
-                        }
-                        Err(e) => {
-                            self.error = Some(format!("Failed to refresh comments: {}", e));
-                            self.set_loading(false);
-                        }
-                    }
+
+                    let client = self.client.clone();
+                    let tx = self.result_tx.clone();
+                    let task_id = self.start_task(format!("Refresh comments for {}", story_id));
+
+                    tokio::spawn(async move {
+                        client.clear_cache().await;
+                        let result = client
+                            .fetch_comments_flat(&story, 5)
+                            .await
+                            .map_err(|e| e.to_string());
+                        let _ = tx
+                            .send(AsyncResult::CommentsLoaded {
+                                story_id,
+                                task_id,
+                                result,
+                            })
+                            .await;
+                    });
                 }
             }
         }
     }
 
-    async fn switch_feed(&mut self, feed: Feed) {
+    fn switch_feed(&mut self, feed: Feed) {
         if self.feed != feed {
             self.feed = feed;
             self.view = View::Stories;
-            self.load_stories().await;
+            self.load_stories();
         }
     }
 
-    async fn cycle_feed(&mut self, direction: i32) {
+    fn cycle_feed(&mut self, direction: i32) {
         let feeds = Feed::all();
         let current_idx = feeds.iter().position(|&f| f == self.feed).unwrap_or(0);
         let new_idx = (current_idx as i32 + direction).rem_euclid(feeds.len() as i32) as usize;
-        self.switch_feed(feeds[new_idx]).await;
+        self.switch_feed(feeds[new_idx]);
     }
 
-    pub async fn load_stories(&mut self) {
+    pub fn load_stories(&mut self) {
+        self.generation += 1;
         self.set_loading(true);
         self.error = None;
         self.stories.clear();
         self.current_page = 0;
         self.has_more = true;
 
-        match self.client.fetch_stories(self.feed, 0).await {
-            Ok(stories) => {
-                self.stories = stories;
-                self.set_loading(false);
-                self.selected_index = 0;
-                self.scroll_offset = 0;
-            }
-            Err(e) => {
-                self.error = Some(format!("Failed to load stories: {}", e));
-                self.set_loading(false);
-            }
-        }
+        let client = self.client.clone();
+        let feed = self.feed;
+        let tx = self.result_tx.clone();
+        let generation = self.generation;
+        let task_id = self.start_task(format!("Load {} stories", feed.label()));
+
+        tokio::spawn(async move {
+            let result = client
+                .fetch_stories(feed, 0)
+                .await
+                .map_err(|e| e.to_string());
+            let _ = tx
+                .send(AsyncResult::StoriesLoaded {
+                    generation,
+                    task_id,
+                    result,
+                })
+                .await;
+        });
     }
 
     fn should_load_more(&self) -> bool {
@@ -387,7 +625,7 @@ impl App {
             && self.selected_index + THRESHOLD >= self.stories.len()
     }
 
-    async fn load_more(&mut self) {
+    fn load_more(&mut self) {
         if self.loading_more || !self.has_more {
             return;
         }
@@ -395,21 +633,25 @@ impl App {
         self.loading_more = true;
         let next_page = self.current_page + 1;
 
-        match self.client.fetch_stories(self.feed, next_page).await {
-            Ok(stories) => {
-                if stories.is_empty() {
-                    self.has_more = false;
-                } else {
-                    self.stories.extend(stories);
-                    self.current_page = next_page;
-                }
-                self.loading_more = false;
-            }
-            Err(e) => {
-                self.error = Some(format!("Failed to load more: {}", e));
-                self.loading_more = false;
-            }
-        }
+        let client = self.client.clone();
+        let feed = self.feed;
+        let tx = self.result_tx.clone();
+        let generation = self.generation;
+        let task_id = self.start_task(format!("Load {} page {}", feed.label(), next_page));
+
+        tokio::spawn(async move {
+            let result = client
+                .fetch_stories(feed, next_page)
+                .await
+                .map_err(|e| e.to_string());
+            let _ = tx
+                .send(AsyncResult::MoreStoriesLoaded {
+                    generation,
+                    task_id,
+                    result,
+                })
+                .await;
+        });
     }
 }
 

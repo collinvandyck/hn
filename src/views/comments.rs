@@ -215,7 +215,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
 
     let theme = &app.theme;
     let help_text = if app.show_help {
-        "j/k:nav  l:expand  h:collapse  o:story  c:link  Esc:back  r:refresh  q:quit  ?:hide"
+        "j/k:nav  l:expand  h:collapse  o:story  c:link  Esc:back  r:refresh  `:debug  q:quit  ?:hide"
     } else {
         "l/h:expand/collapse  Esc:back  ?:help"
     };

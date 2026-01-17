@@ -9,6 +9,7 @@ pub fn handle_key(key: KeyEvent, app: &App) -> Option<Message> {
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             return Some(Message::Quit);
         }
+        KeyCode::Char('`') => return Some(Message::ToggleDebug),
         _ => {}
     }
 
