@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::api::{Feed, Story};
 use crate::app::App;
+use crate::theme::ResolvedTheme;
 
 /// Render the stories list view
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
@@ -24,19 +25,20 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_feed_tabs(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = &app.theme;
     let tabs: Vec<Span> = Feed::all()
         .iter()
         .enumerate()
         .flat_map(|(i, feed)| {
             let style = if *feed == app.feed {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(theme.foreground_dim)
             };
             vec![
-                Span::styled(format!("[{}]", i + 1), Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("[{}]", i + 1), Style::default().fg(theme.foreground_dim)),
                 Span::styled(feed.label(), style),
                 Span::raw("  "),
             ]
@@ -48,18 +50,20 @@ fn render_feed_tabs(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = &app.theme;
+
     if app.loading {
         let loading = Paragraph::new("Loading...")
-            .style(Style::default().fg(Color::Yellow))
-            .block(Block::default().borders(Borders::ALL).title("Stories"));
+            .style(Style::default().fg(theme.warning))
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Stories"));
         frame.render_widget(loading, area);
         return;
     }
 
     if let Some(err) = &app.error {
         let error = Paragraph::new(err.as_str())
-            .style(Style::default().fg(Color::Red))
-            .block(Block::default().borders(Borders::ALL).title("Error"));
+            .style(Style::default().fg(theme.error))
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Error"));
         frame.render_widget(error, area);
         return;
     }
@@ -68,17 +72,17 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
         .stories
         .iter()
         .enumerate()
-        .map(|(i, story)| story_to_list_item(story, i + 1))
+        .map(|(i, story)| story_to_list_item(story, i + 1, theme))
         .collect();
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title(format!(
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title(format!(
             "{} Stories",
             app.feed.label()
         )))
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(theme.selection_bg)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
@@ -88,16 +92,16 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, area, &mut state);
 }
 
-fn story_to_list_item(story: &Story, rank: usize) -> ListItem<'static> {
+fn story_to_list_item(story: &Story, rank: usize, theme: &ResolvedTheme) -> ListItem<'static> {
     let title_line = Line::from(vec![
         Span::styled(
             format!("{:>3}. ", rank),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.foreground_dim),
         ),
-        Span::styled(story.title.clone(), Style::default().fg(Color::White)),
+        Span::styled(story.title.clone(), Style::default().fg(theme.story_title)),
         Span::styled(
             format!(" ({})", story.domain()),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.story_domain),
         ),
     ]);
 
@@ -105,19 +109,19 @@ fn story_to_list_item(story: &Story, rank: usize) -> ListItem<'static> {
         Span::raw("     "),
         Span::styled(
             format!("▲ {}", story.score),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(theme.story_score),
         ),
         Span::raw(" | "),
-        Span::styled(story.by.clone(), Style::default().fg(Color::Cyan)),
+        Span::styled(story.by.clone(), Style::default().fg(theme.story_author)),
         Span::raw(" | "),
         Span::styled(
             format!("{} comments", story.descendants),
-            Style::default().fg(Color::Green),
+            Style::default().fg(theme.story_comments),
         ),
         Span::raw(" | "),
         Span::styled(
             format_time(story.time),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.story_time),
         ),
     ]);
 
@@ -125,26 +129,42 @@ fn story_to_list_item(story: &Story, rank: usize) -> ListItem<'static> {
 }
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
+    use super::spinner::spinner_frame;
+
+    let theme = &app.theme;
     let help_text = if app.show_help {
         "j/k:nav  g/G:top/bottom  H/L:feeds  o:open  l:comments  c:HN  1-6:feeds  r:refresh  q:quit  ?:hide"
     } else {
         "H/L:feeds  ?:help  q:quit"
     };
 
-    let status = Line::from(vec![
+    let mut spans = vec![
         Span::styled(
             format!(" {} ", app.feed.label()),
-            Style::default().bg(Color::Blue).fg(Color::White),
+            Style::default().bg(theme.status_bar_bg).fg(theme.status_bar_fg),
         ),
         Span::raw(" "),
+    ];
+
+    // Show spinner when loading
+    if app.loading {
+        spans.push(Span::styled(
+            format!("{} Loading... ", spinner_frame(app.loading_start)),
+            Style::default().fg(theme.spinner),
+        ));
+        spans.push(Span::raw("| "));
+    }
+
+    spans.extend([
         Span::styled(
             format!("{}/{}", app.selected_index + 1, app.stories.len()),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.foreground_dim),
         ),
         Span::raw(" | "),
-        Span::styled(help_text, Style::default().fg(Color::DarkGray)),
+        Span::styled(help_text, Style::default().fg(theme.foreground_dim)),
     ]);
 
+    let status = Line::from(spans);
     frame.render_widget(Paragraph::new(status), area);
 }
 

@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
@@ -9,20 +9,7 @@ use textwrap;
 
 use crate::api::Comment;
 use crate::app::{App, View};
-
-/// Colors for different nesting depths (cycles after 6)
-const DEPTH_COLORS: [Color; 6] = [
-    Color::Cyan,
-    Color::Green,
-    Color::Yellow,
-    Color::Magenta,
-    Color::Blue,
-    Color::Red,
-];
-
-fn depth_color(depth: usize) -> Color {
-    DEPTH_COLORS[depth % DEPTH_COLORS.len()]
-}
+use crate::theme::ResolvedTheme;
 
 /// Render the comments view
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
@@ -38,42 +25,45 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     ])
     .split(area);
 
-    render_header(frame, &story_title, chunks[0]);
+    let theme = &app.theme;
+    render_header(frame, &story_title, chunks[0], theme);
     render_comment_list(frame, app, chunks[1]);
     render_status_bar(frame, app, chunks[2]);
 }
 
-fn render_header(frame: &mut Frame, title: &str, area: Rect) {
+fn render_header(frame: &mut Frame, title: &str, area: Rect, theme: &ResolvedTheme) {
     let header = Paragraph::new(title)
         .style(
             Style::default()
-                .fg(Color::White)
+                .fg(theme.story_title)
                 .add_modifier(Modifier::BOLD),
         );
     frame.render_widget(header, area);
 }
 
 fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = &app.theme;
+
     if app.loading {
         let loading = Paragraph::new("Loading comments...")
-            .style(Style::default().fg(Color::Yellow))
-            .block(Block::default().borders(Borders::ALL).title("Comments"));
+            .style(Style::default().fg(theme.warning))
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Comments"));
         frame.render_widget(loading, area);
         return;
     }
 
     if let Some(err) = &app.error {
         let error = Paragraph::new(err.as_str())
-            .style(Style::default().fg(Color::Red))
-            .block(Block::default().borders(Borders::ALL).title("Error"));
+            .style(Style::default().fg(theme.error))
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Error"));
         frame.render_widget(error, area);
         return;
     }
 
     if app.comments.is_empty() {
         let empty = Paragraph::new("No comments yet")
-            .style(Style::default().fg(Color::DarkGray))
-            .block(Block::default().borders(Borders::ALL).title("Comments"));
+            .style(Style::default().fg(theme.foreground_dim))
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title("Comments"));
         frame.render_widget(empty, area);
         return;
     }
@@ -88,7 +78,7 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
         .map(|&i| {
             let comment = &app.comments[i];
             let is_expanded = app.expanded_comments.contains(&comment.id);
-            comment_to_list_item(comment, content_width, is_expanded)
+            comment_to_list_item(comment, content_width, is_expanded, theme)
         })
         .collect();
 
@@ -96,9 +86,10 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border))
                 .title(format!("Comments ({})", app.comments.len())),
         )
-        .highlight_style(Style::default().bg(Color::Rgb(40, 40, 40)))
+        .highlight_style(Style::default().bg(theme.selection_bg))
         .highlight_symbol("▶ ");
 
     let mut state = ListState::default();
@@ -116,8 +107,8 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, area, &mut state);
 }
 
-fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool) -> ListItem<'static> {
-    let color = depth_color(comment.depth);
+fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, theme: &ResolvedTheme) -> ListItem<'static> {
+    let color = theme.depth_color(comment.depth);
     let indent_width = comment.depth * 2;
     let indent = " ".repeat(indent_width);
     let has_children = !comment.kids.is_empty();
@@ -135,21 +126,21 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool) 
     // Collapse/expand indicator (fixed width for alignment)
     let expand_indicator = if has_children {
         if is_expanded {
-            Span::styled("[-] ", Style::default().fg(Color::DarkGray))
+            Span::styled("[-] ", Style::default().fg(theme.foreground_dim))
         } else {
-            Span::styled("[+] ", Style::default().fg(Color::Yellow))
+            Span::styled("[+] ", Style::default().fg(theme.warning))
         }
     } else {
-        Span::styled("[ ] ", Style::default().fg(Color::DarkGray))
+        Span::styled("[ ] ", Style::default().fg(theme.foreground_dim))
     };
 
     // Child count for RHS (only show if has children)
     let child_info = if has_children {
         vec![
-            Span::styled(" · ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" · ", Style::default().fg(theme.foreground_dim)),
             Span::styled(
                 format!("{} replies", comment.kids.len()),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.foreground_dim),
             ),
         ]
     } else {
@@ -164,8 +155,8 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool) 
             comment.by.clone(),
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" · ", Style::default().fg(Color::DarkGray)),
-        Span::styled(format_time(comment.time), Style::default().fg(Color::DarkGray)),
+        Span::styled(" · ", Style::default().fg(theme.foreground_dim)),
+        Span::styled(format_time(comment.time), Style::default().fg(theme.foreground_dim)),
     ];
     meta_spans.extend(child_info);
     let meta_line = Line::from(meta_spans);
@@ -188,8 +179,8 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool) 
 
     for wrapped_line in wrapped_lines {
         lines.push(Line::from(vec![
-            Span::styled(text_indent.clone(), Style::default().fg(Color::DarkGray)),
-            Span::styled(wrapped_line, Style::default().fg(Color::White)),
+            Span::styled(text_indent.clone(), Style::default().fg(theme.foreground_dim)),
+            Span::styled(wrapped_line, Style::default().fg(theme.comment_text)),
         ]));
     }
 
@@ -212,26 +203,42 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 }
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
+    use super::spinner::spinner_frame;
+
+    let theme = &app.theme;
     let help_text = if app.show_help {
         "j/k:nav  l:expand  h:collapse  o:story  c:link  Esc:back  r:refresh  q:quit  ?:hide"
     } else {
         "l/h:expand/collapse  Esc:back  ?:help"
     };
 
-    let status = Line::from(vec![
+    let mut spans = vec![
         Span::styled(
             " Comments ",
-            Style::default().bg(Color::Green).fg(Color::Black),
+            Style::default().bg(theme.status_bar_bg).fg(theme.status_bar_fg),
         ),
         Span::raw(" "),
+    ];
+
+    // Show spinner when loading
+    if app.loading {
+        spans.push(Span::styled(
+            format!("{} Loading... ", spinner_frame(app.loading_start)),
+            Style::default().fg(theme.spinner),
+        ));
+        spans.push(Span::raw("| "));
+    }
+
+    spans.extend([
         Span::styled(
             format!("{}/{}", app.selected_index + 1, app.comments.len()),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.foreground_dim),
         ),
         Span::raw(" | "),
-        Span::styled(help_text, Style::default().fg(Color::DarkGray)),
+        Span::styled(help_text, Style::default().fg(theme.foreground_dim)),
     ]);
 
+    let status = Line::from(spans);
     frame.render_widget(Paragraph::new(status), area);
 }
 

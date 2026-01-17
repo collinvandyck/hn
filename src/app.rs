@@ -1,6 +1,8 @@
 use std::collections::HashSet;
+use std::time::Instant;
 
 use crate::api::{Comment, Feed, HnClient, Story};
+use crate::theme::ResolvedTheme;
 
 /// Current view in the application
 #[derive(Debug, Clone, PartialEq)]
@@ -58,15 +60,17 @@ pub struct App {
     pub expanded_comments: HashSet<u64>,
     pub selected_index: usize,
     pub loading: bool,
+    pub loading_start: Option<Instant>,
     pub error: Option<String>,
     pub should_quit: bool,
     pub show_help: bool,
     pub client: HnClient,
     pub scroll_offset: usize,
+    pub theme: ResolvedTheme,
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+    pub fn new(theme: ResolvedTheme) -> Self {
         Self {
             view: View::default(),
             feed: Feed::default(),
@@ -75,18 +79,20 @@ impl Default for App {
             expanded_comments: HashSet::new(),
             selected_index: 0,
             loading: false,
+            loading_start: None,
             error: None,
             should_quit: false,
             show_help: false,
             client: HnClient::new(),
             scroll_offset: 0,
+            theme,
         }
     }
-}
 
-impl App {
-    pub fn new() -> Self {
-        Self::default()
+    /// Set loading state with timestamp for spinner animation
+    fn set_loading(&mut self, loading: bool) {
+        self.loading = loading;
+        self.loading_start = if loading { Some(Instant::now()) } else { None };
     }
 
     /// Update the app state based on a message
@@ -280,7 +286,7 @@ impl App {
                     story_index,
                     story_scroll,
                 };
-                self.loading = true;
+                self.set_loading(true);
                 self.comments.clear();
                 self.expanded_comments.clear();
                 self.selected_index = 0;
@@ -289,11 +295,11 @@ impl App {
                 match self.client.fetch_comments_flat(&story, 5).await {
                     Ok(comments) => {
                         self.comments = comments;
-                        self.loading = false;
+                        self.set_loading(false);
                     }
                     Err(e) => {
                         self.error = Some(format!("Failed to load comments: {}", e));
-                        self.loading = false;
+                        self.set_loading(false);
                     }
                 }
             }
@@ -320,15 +326,15 @@ impl App {
             View::Comments { story_id, .. } => {
                 let story_id = *story_id;
                 if let Some(story) = self.stories.iter().find(|s| s.id == story_id).cloned() {
-                    self.loading = true;
+                    self.set_loading(true);
                     match self.client.fetch_comments_flat(&story, 5).await {
                         Ok(comments) => {
                             self.comments = comments;
-                            self.loading = false;
+                            self.set_loading(false);
                         }
                         Err(e) => {
                             self.error = Some(format!("Failed to refresh comments: {}", e));
-                            self.loading = false;
+                            self.set_loading(false);
                         }
                     }
                 }
@@ -353,20 +359,20 @@ impl App {
 
     /// Load stories for the current feed
     pub async fn load_stories(&mut self) {
-        self.loading = true;
+        self.set_loading(true);
         self.error = None;
         self.stories.clear();
 
         match self.client.fetch_stories(self.feed, 0).await {
             Ok(stories) => {
                 self.stories = stories;
-                self.loading = false;
+                self.set_loading(false);
                 self.selected_index = 0;
                 self.scroll_offset = 0;
             }
             Err(e) => {
                 self.error = Some(format!("Failed to load stories: {}", e));
-                self.loading = false;
+                self.set_loading(false);
             }
         }
     }
@@ -375,10 +381,15 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::{default_for_variant, ThemeVariant};
+
+    fn test_app() -> App {
+        App::new(default_for_variant(ThemeVariant::Dark))
+    }
 
     #[test]
-    fn test_default_app() {
-        let app = App::default();
+    fn test_new_app() {
+        let app = test_app();
         assert_eq!(app.view, View::Stories);
         assert_eq!(app.feed, Feed::Top);
         assert!(!app.should_quit);
@@ -386,7 +397,7 @@ mod tests {
 
     #[test]
     fn test_navigation() {
-        let mut app = App::default();
+        let mut app = test_app();
         app.stories = vec![
             Story {
                 id: 1,
@@ -423,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_go_back_restores_state() {
-        let mut app = App::default();
+        let mut app = test_app();
         app.view = View::Comments {
             story_id: 1,
             story_title: "Test".to_string(),

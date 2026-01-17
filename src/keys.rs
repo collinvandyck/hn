@@ -91,6 +91,7 @@ fn handle_comments_key(key: KeyEvent) -> Option<Message> {
 mod tests {
     use super::*;
     use crossterm::event::KeyEventState;
+    use crate::theme::{default_for_variant, ThemeVariant};
 
     fn make_key(code: KeyCode) -> KeyEvent {
         KeyEvent {
@@ -101,9 +102,13 @@ mod tests {
         }
     }
 
+    fn test_app() -> App {
+        App::new(default_for_variant(ThemeVariant::Dark))
+    }
+
     #[test]
     fn test_quit_key() {
-        let app = App::default();
+        let app = test_app();
         assert!(matches!(
             handle_key(make_key(KeyCode::Char('q')), &app),
             Some(Message::Quit)
@@ -112,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_navigation_keys() {
-        let app = App::default();
+        let app = test_app();
         assert!(matches!(
             handle_key(make_key(KeyCode::Char('j')), &app),
             Some(Message::SelectNext)
@@ -125,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_feed_switch_keys() {
-        let app = App::default();
+        let app = test_app();
         assert!(matches!(
             handle_key(make_key(KeyCode::Char('1')), &app),
             Some(Message::SwitchFeed(Feed::Top))
@@ -138,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_feed_cycle_keys() {
-        let app = App::default();
+        let app = test_app();
         assert!(matches!(
             handle_key(make_key(KeyCode::Char('H')), &app),
             Some(Message::PrevFeed)
