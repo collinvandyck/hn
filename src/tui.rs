@@ -1,6 +1,6 @@
 use anyhow::Result;
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, Event as CrosstermEvent, EventStream},
+    event::{Event as CrosstermEvent, EventStream},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -17,7 +17,7 @@ pub type Tui = Terminal<CrosstermBackend<Stdout>>;
 pub fn init() -> Result<Tui> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let terminal = Terminal::new(backend)?;
     Ok(terminal)
@@ -25,7 +25,7 @@ pub fn init() -> Result<Tui> {
 
 pub fn restore() -> Result<()> {
     disable_raw_mode()?;
-    execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(io::stdout(), LeaveAlternateScreen)?;
     Ok(())
 }
 
@@ -57,9 +57,6 @@ impl EventHandler {
                                 if key.kind == crossterm::event::KeyEventKind::Press {
                                     return Ok(Event::Key(key));
                                 }
-                            }
-                            CrosstermEvent::Mouse(_) => {
-                                return Ok(Event::Mouse);
                             }
                             CrosstermEvent::Resize(_, _) => {
                                 return Ok(Event::Resize);

@@ -4,6 +4,5 @@ use crossterm::event::KeyEvent;
 pub enum Event {
     Tick,
     Key(KeyEvent),
-    Mouse,
     Resize,
 }

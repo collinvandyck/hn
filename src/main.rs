@@ -152,7 +152,7 @@ async fn run_tui(cli: Cli) -> Result<()> {
                     app.update(msg);
                 }
             }
-            Event::Tick | Event::Resize | Event::Mouse => {}
+            Event::Tick | Event::Resize => {}
         }
     }
 
