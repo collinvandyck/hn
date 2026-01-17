@@ -1,6 +1,7 @@
 //! Test data builders for view testing.
 
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 use std::time::Instant;
 
 use tokio::sync::mpsc;
@@ -8,6 +9,12 @@ use tokio::sync::mpsc;
 use crate::api::{Comment, Feed, HnClient, Story};
 use crate::app::{App, View};
 use crate::theme::{ResolvedTheme, ThemeVariant, default_for_variant};
+use crate::time::{Clock, fixed_clock};
+
+/// Fixed timestamp for deterministic tests: 2023-11-15 00:00:00 UTC
+/// This is 1 day after the base timestamp (1700000000) used in sample data,
+/// so stories/comments will show as "1d ago".
+pub const TEST_NOW: i64 = 1700092800;
 
 #[allow(dead_code)]
 pub struct StoryBuilder {
@@ -187,6 +194,7 @@ pub struct TestAppBuilder {
     show_help: bool,
     scroll_offset: usize,
     theme: ResolvedTheme,
+    clock: Arc<dyn Clock>,
     debug_visible: bool,
     viewport_height: Option<u16>,
 }
@@ -216,6 +224,7 @@ impl TestAppBuilder {
             show_help: false,
             scroll_offset: 0,
             theme: default_for_variant(ThemeVariant::Dark),
+            clock: fixed_clock(TEST_NOW),
             debug_visible: false,
             viewport_height: None,
         }
@@ -312,6 +321,7 @@ impl TestAppBuilder {
             client: HnClient::new(),
             scroll_offset: self.scroll_offset,
             theme: self.theme,
+            clock: self.clock,
             result_tx,
             result_rx,
             generation: 0,

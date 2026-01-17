@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -9,6 +11,7 @@ use ratatui::{
 use crate::api::{Feed, Story};
 use crate::app::App;
 use crate::theme::ResolvedTheme;
+use crate::time::{Clock, format_relative};
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::vertical([
@@ -80,7 +83,7 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
         .stories
         .iter()
         .enumerate()
-        .map(|(i, story)| story_to_list_item(story, i + 1, theme))
+        .map(|(i, story)| story_to_list_item(story, i + 1, theme, &app.clock))
         .collect();
 
     let list = List::new(items)
@@ -102,7 +105,12 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, area, &mut state);
 }
 
-fn story_to_list_item(story: &Story, rank: usize, theme: &ResolvedTheme) -> ListItem<'static> {
+fn story_to_list_item(
+    story: &Story,
+    rank: usize,
+    theme: &ResolvedTheme,
+    clock: &Arc<dyn Clock>,
+) -> ListItem<'static> {
     let title_line = Line::from(vec![
         Span::styled(
             format!("{:>3}. ", rank),
@@ -130,7 +138,7 @@ fn story_to_list_item(story: &Story, rank: usize, theme: &ResolvedTheme) -> List
         ),
         Span::raw(" | "),
         Span::styled(
-            format_time(story.time),
+            format_relative(story.time, clock.now()),
             Style::default().fg(theme.story_time),
         ),
     ]);
@@ -164,27 +172,6 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
 
     let status = Line::from(spans);
     frame.render_widget(Paragraph::new(status), area);
-}
-
-fn format_time(timestamp: u64) -> String {
-    use chrono::{TimeZone, Utc};
-
-    let now = Utc::now();
-    let then = Utc.timestamp_opt(timestamp as i64, 0).single();
-
-    match then {
-        Some(t) => {
-            let diff = now.signed_duration_since(t);
-            if diff.num_hours() < 1 {
-                format!("{}m ago", diff.num_minutes())
-            } else if diff.num_hours() < 24 {
-                format!("{}h ago", diff.num_hours())
-            } else {
-                format!("{}d ago", diff.num_days())
-            }
-        }
-        None => "?".to_string(),
-    }
 }
 
 #[cfg(test)]

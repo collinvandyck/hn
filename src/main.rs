@@ -4,6 +4,7 @@ mod cli;
 mod event;
 mod keys;
 mod theme;
+mod time;
 mod tui;
 mod views;
 

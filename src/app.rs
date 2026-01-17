@@ -1,10 +1,12 @@
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 use std::time::Instant;
 
 use tokio::sync::mpsc;
 
 use crate::api::{Comment, Feed, HnClient, Story};
 use crate::theme::ResolvedTheme;
+use crate::time::Clock;
 
 pub enum AsyncResult {
     Stories {
@@ -88,6 +90,7 @@ pub struct App {
     pub client: HnClient,
     pub scroll_offset: usize,
     pub theme: ResolvedTheme,
+    pub clock: Arc<dyn Clock>,
     // Async task management
     pub result_tx: mpsc::Sender<AsyncResult>,
     pub result_rx: mpsc::Receiver<AsyncResult>,
@@ -122,6 +125,7 @@ impl App {
             client: HnClient::new(),
             scroll_offset: 0,
             theme,
+            clock: crate::time::system_clock(),
             result_tx,
             result_rx,
             generation: 0,
@@ -380,14 +384,29 @@ impl App {
 
     fn collapse_comment(&mut self) {
         if let View::Comments { .. } = self.view {
-            let (id, depth) = match self.selected_comment() {
-                Some(c) => (c.id, c.depth),
-                None => return,
+            let Some(comment) = self.selected_comment() else {
+                // No comments - go back to stories
+                self.go_back();
+                return;
             };
+
+            let (id, depth) = (comment.id, comment.depth);
+            let has_children = !comment.kids.is_empty();
+            let is_expanded = self.expanded_comments.contains(&id);
+
+            if depth == 0 {
+                // Top-level: collapse if expanded with children, otherwise go back
+                if has_children && is_expanded {
+                    self.expanded_comments.remove(&id);
+                } else {
+                    self.go_back();
+                }
+                return;
+            }
 
             self.expanded_comments.remove(&id);
 
-            if depth > 0 && self.selected_index > 0 {
+            if self.selected_index > 0 {
                 let visible = self.visible_comment_indices();
                 for i in (0..self.selected_index).rev() {
                     if let Some(&actual_idx) = visible.get(i)
