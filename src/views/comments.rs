@@ -13,7 +13,11 @@ use crate::api::Comment;
 use crate::app::{App, View};
 use crate::theme::ResolvedTheme;
 use crate::time::{Clock, format_relative};
+use crate::views::html::strip_html;
 use crate::views::status_bar::StatusBar;
+use crate::views::tree::{
+    build_empty_line_prefix, build_meta_tree_prefix, build_text_prefix, compute_tree_context,
+};
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let story_title = match &app.view {
@@ -41,31 +45,6 @@ fn render_header(frame: &mut Frame, title: &str, area: Rect, theme: &ResolvedThe
             .add_modifier(Modifier::BOLD),
     );
     frame.render_widget(header, area);
-}
-
-fn compute_tree_context(comments: &[Comment], visible_indices: &[usize]) -> Vec<Vec<bool>> {
-    visible_indices
-        .iter()
-        .enumerate()
-        .map(|(vis_idx, &actual_idx)| {
-            let depth = comments[actual_idx].depth;
-
-            (0..=depth)
-                .map(|check_depth| {
-                    for &future_idx in &visible_indices[vis_idx + 1..] {
-                        let future_depth = comments[future_idx].depth;
-                        if future_depth == check_depth {
-                            return true;
-                        }
-                        if future_depth < check_depth {
-                            return false;
-                        }
-                    }
-                    false
-                })
-                .collect()
-        })
-        .collect()
 }
 
 fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
@@ -230,98 +209,6 @@ fn comment_to_list_item(
     ListItem::new(lines)
 }
 
-fn build_meta_tree_prefix(
-    depth: usize,
-    has_more_at_depth: &[bool],
-    color: ratatui::style::Color,
-) -> Span<'static> {
-    if depth == 0 {
-        return Span::raw("");
-    }
-
-    // Each depth level is 4 characters
-    // Format: [ancestor continuation chars] + [connector] + space
-    let mut prefix = String::new();
-
-    // Add ancestor continuation (│ or spaces) for depths 1 to depth-1
-    // Each segment is 4 chars: space + (│ or space) + 2 spaces
-    for d in 1..depth {
-        if has_more_at_depth.get(d).copied().unwrap_or(false) {
-            prefix.push_str(" │  "); // space + │ + 2 spaces = 4 chars
-        } else {
-            prefix.push_str("    "); // 4 spaces
-        }
-    }
-
-    // Add connector for current depth (space + connector + space = 4 chars total)
-    if has_more_at_depth.get(depth).copied().unwrap_or(false) {
-        prefix.push_str(" ├─ ");
-    } else {
-        prefix.push_str(" └─ ");
-    }
-
-    Span::styled(prefix, Style::default().fg(color))
-}
-
-fn build_text_prefix(
-    depth: usize,
-    has_more_at_depth: &[bool],
-    has_children: bool,
-    color: ratatui::style::Color,
-) -> Span<'static> {
-    // Text prefix is (depth + 1) * 4 characters
-    // Format: [ancestor continuation] + [own continuation if has children] + alignment
-    let mut prefix = String::new();
-
-    // Add ancestor continuation for depths 1 to depth
-    // Each segment is 4 chars: space + (│ or space) + 2 spaces
-    for d in 1..=depth {
-        if has_more_at_depth.get(d).copied().unwrap_or(false) {
-            prefix.push_str(" │  "); // space + │ + 2 spaces = 4 chars
-        } else {
-            prefix.push_str("    "); // 4 spaces
-        }
-    }
-
-    // Add own tree line if has children, otherwise spaces for alignment
-    // This segment is 4 chars to maintain alignment
-    if has_children {
-        prefix.push_str(" │  "); // space + │ + 2 spaces = 4 chars
-    } else {
-        prefix.push_str("    "); // 4 spaces
-    }
-
-    Span::styled(prefix, Style::default().fg(color))
-}
-
-fn build_empty_line_prefix(
-    depth: usize,
-    has_more_at_depth: &[bool],
-    has_children: bool,
-    color: ratatui::style::Color,
-) -> Span<'static> {
-    // Empty line shows tree continuation
-    // │ appears at position (d-1)*4+1 for each depth d where continuation is needed
-    let mut prefix = String::new();
-
-    // For depths 1 to depth, add continuation markers
-    for d in 1..=depth {
-        // Each depth segment is 4 chars: space + (│ or space) + 2 spaces
-        if has_more_at_depth.get(d).copied().unwrap_or(false) {
-            prefix.push_str(" │  ");
-        } else {
-            prefix.push_str("    ");
-        }
-    }
-
-    // Add own tree line if has children (for expanded comments showing text)
-    if has_children {
-        prefix.push_str(" │");
-    }
-
-    Span::styled(prefix, Style::default().fg(color))
-}
-
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
     if text.is_empty() {
         return vec![];
@@ -360,90 +247,12 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     status_bar.render(frame, area);
 }
 
-fn strip_html(html: &str) -> String {
-    html.replace("<p>", "\n\n")
-        .replace("</p>", "")
-        .replace("<br>", "\n")
-        .replace("<br/>", "\n")
-        .replace("<br />", "\n")
-        .replace("<i>", "_")
-        .replace("</i>", "_")
-        .replace("<b>", "*")
-        .replace("</b>", "*")
-        .replace("<code>", "`")
-        .replace("</code>", "`")
-        .replace("<pre>", "\n```\n")
-        .replace("</pre>", "\n```\n")
-        .replace("&gt;", ">")
-        .replace("&lt;", "<")
-        .replace("&amp;", "&")
-        .replace("&quot;", "\"")
-        .replace("&#x27;", "'")
-        .replace("&#39;", "'")
-        .replace("&#x2F;", "/")
-        .split("<a ")
-        .enumerate()
-        .map(|(i, part)| {
-            if i == 0 {
-                part.to_string()
-            } else if let Some(start) = part.find('>')
-                && let Some(end) = part.find("</a>")
-            {
-                let link_text = &part[start + 1..end];
-                let rest = &part[end + 4..];
-                format!("{}{}", link_text, rest)
-            } else {
-                part.to_string()
-            }
-        })
-        .collect::<String>()
-        .lines()
-        .map(|l| l.trim())
-        .collect::<Vec<_>>()
-        .join(" ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::View;
     use crate::test_utils::{CommentBuilder, TestAppBuilder, sample_comments};
     use crate::views::tests::render_to_string;
-
-    #[test]
-    fn test_strip_html_basic_tags() {
-        assert_eq!(strip_html("<p>Hello</p><p>World</p>"), "Hello World");
-        assert_eq!(strip_html("Line1<br>Line2"), "Line1 Line2");
-    }
-
-    #[test]
-    fn test_strip_html_formatting() {
-        assert_eq!(strip_html("<i>italic</i>"), "_italic_");
-        assert_eq!(strip_html("<b>bold</b>"), "*bold*");
-        assert_eq!(strip_html("<code>code</code>"), "`code`");
-    }
-
-    #[test]
-    fn test_strip_html_entities() {
-        assert_eq!(strip_html("&lt;tag&gt;"), "<tag>");
-        assert_eq!(strip_html("&amp;&quot;&#x27;"), "&\"'");
-        assert_eq!(strip_html("path&#x2F;to&#x2F;file"), "path/to/file");
-    }
-
-    #[test]
-    fn test_strip_html_links() {
-        let html = r#"Check <a href="https://example.com">this link</a> out"#;
-        assert_eq!(strip_html(html), "Check this link out");
-    }
-
-    #[test]
-    fn test_strip_html_collapses_whitespace() {
-        assert_eq!(strip_html("  too   many    spaces  "), "too many spaces");
-        assert_eq!(strip_html("<p>  \n\n  </p>text"), "text");
-    }
 
     #[test]
     fn test_comments_view_renders_thread() {
@@ -467,7 +276,6 @@ mod tests {
 
     #[test]
     fn test_comments_view_depth_indentation() {
-        // Create a deep comment tree to test indentation
         let comments = vec![
             CommentBuilder::new()
                 .id(1)
@@ -507,7 +315,7 @@ mod tests {
                 story_index: 0,
                 story_scroll: 0,
             })
-            .expanded(vec![1, 2, 3]) // Expand all to show full thread
+            .expanded(vec![1, 2, 3])
             .build();
 
         let output = render_to_string(80, 24, |frame| {
@@ -562,8 +370,6 @@ mod tests {
 
     #[test]
     fn test_comments_view_top_level_collapsed_no_connectors() {
-        // Multiple top-level comments, some collapsed with children.
-        // Collapsed comments should NOT show │ connectors since their children are hidden.
         let comments = vec![
             CommentBuilder::new()
                 .id(1)
@@ -595,7 +401,6 @@ mod tests {
                 story_index: 0,
                 story_scroll: 0,
             })
-            // No comments expanded - all collapsed
             .build();
 
         let output = render_to_string(80, 24, |frame| {
@@ -607,8 +412,6 @@ mod tests {
 
     #[test]
     fn test_comments_view_collapsed_children_show_text() {
-        // When a parent is expanded, its collapsed children with grandchildren
-        // should still show their text (like DexesTTP in the example).
         let comments = vec![
             CommentBuilder::new()
                 .id(1)
@@ -646,7 +449,7 @@ mod tests {
                 story_index: 0,
                 story_scroll: 0,
             })
-            .expanded(vec![1]) // Only parent expanded, child_parent is collapsed
+            .expanded(vec![1])
             .build();
 
         let output = render_to_string(80, 24, |frame| {
