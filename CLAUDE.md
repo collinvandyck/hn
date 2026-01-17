@@ -14,6 +14,8 @@ To use the tools, you should call `mise exec -- [cargo|just|...] [args...]`
 
 ## Quick Reference
 
+Defined in `.justfile`:
+
 ```bash
 just              # Run TUI in dev mode
 just test         # Run tests
