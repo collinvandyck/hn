@@ -168,8 +168,26 @@ impl App {
 
     fn collapse_comment(&mut self) {
         if let View::Comments { .. } = self.view {
-            if let Some(id) = self.selected_comment().map(|c| c.id) {
-                self.expanded_comments.remove(&id);
+            let (id, depth) = match self.selected_comment() {
+                Some(c) => (c.id, c.depth),
+                None => return,
+            };
+
+            // Always collapse current comment first
+            self.expanded_comments.remove(&id);
+
+            // If child comment, also move to parent
+            if depth > 0 && self.selected_index > 0 {
+                let visible = self.visible_comment_indices();
+                // Walk backwards to find parent (first comment with lower depth)
+                for i in (0..self.selected_index).rev() {
+                    if let Some(&actual_idx) = visible.get(i) {
+                        if self.comments[actual_idx].depth < depth {
+                            self.selected_index = i;
+                            return;
+                        }
+                    }
+                }
             }
         }
     }
