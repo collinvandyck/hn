@@ -152,22 +152,16 @@ impl App {
     }
 
     fn open_url(&self) {
-        match &self.view {
-            View::Stories => {
-                if let Some(story) = self.stories.get(self.selected_index) {
-                    if let Some(url) = &story.url {
-                        let _ = open::that(url);
-                    }
-                }
-            }
-            View::Comments { story_index, .. } => {
-                // Open the story's URL from comments view
-                if let Some(story) = self.stories.get(*story_index) {
-                    if let Some(url) = &story.url {
-                        let _ = open::that(url);
-                    }
-                }
-            }
+        let story = match &self.view {
+            View::Stories => self.stories.get(self.selected_index),
+            View::Comments { story_index, .. } => self.stories.get(*story_index),
+        };
+        if let Some(story) = story {
+            // Use story URL if available, otherwise fall back to HN discussion page
+            let url = story.url.clone().unwrap_or_else(|| {
+                format!("https://news.ycombinator.com/item?id={}", story.id)
+            });
+            let _ = open::that(url);
         }
     }
 
