@@ -132,22 +132,32 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool) 
         Span::raw("")
     };
 
-    // Collapse/expand indicator
+    // Collapse/expand indicator (fixed width for alignment)
     let expand_indicator = if has_children {
         if is_expanded {
             Span::styled("[-] ", Style::default().fg(Color::DarkGray))
         } else {
-            Span::styled(
-                format!("[+{}] ", comment.kids.len()),
-                Style::default().fg(Color::Yellow),
-            )
+            Span::styled("[+] ", Style::default().fg(Color::Yellow))
         }
     } else {
-        Span::styled("    ", Style::default())
+        Span::styled("[ ] ", Style::default().fg(Color::DarkGray))
+    };
+
+    // Child count for RHS (only show if has children)
+    let child_info = if has_children {
+        vec![
+            Span::styled(" · ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{} replies", comment.kids.len()),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]
+    } else {
+        vec![]
     };
 
     // Author line with colored marker
-    let meta_line = Line::from(vec![
+    let mut meta_spans = vec![
         depth_marker,
         expand_indicator,
         Span::styled(
@@ -156,7 +166,9 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool) 
         ),
         Span::styled(" · ", Style::default().fg(Color::DarkGray)),
         Span::styled(format_time(comment.time), Style::default().fg(Color::DarkGray)),
-    ]);
+    ];
+    meta_spans.extend(child_info);
+    let meta_line = Line::from(meta_spans);
 
     // If collapsed with children, show only meta line
     if has_children && !is_expanded {
