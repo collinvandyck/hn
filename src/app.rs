@@ -1,10 +1,11 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
 use tokio::sync::mpsc;
 
 use crate::api::{Comment, Feed, HnClient, Story};
+use crate::comment_tree::CommentTree;
 use crate::theme::ResolvedTheme;
 use crate::time::Clock;
 
@@ -80,8 +81,7 @@ pub struct App {
     pub view: View,
     pub feed: Feed,
     pub stories: Vec<Story>,
-    pub comments: Vec<Comment>,
-    pub expanded_comments: HashSet<u64>,
+    pub comment_tree: CommentTree,
     pub selected_index: usize,
     pub loading: bool,
     pub loading_start: Option<Instant>,
@@ -115,8 +115,7 @@ impl App {
             view: View::default(),
             feed: Feed::default(),
             stories: Vec::new(),
-            comments: Vec::new(),
-            expanded_comments: HashSet::new(),
+            comment_tree: CommentTree::new(),
             selected_index: 0,
             loading: false,
             loading_start: None,
@@ -280,7 +279,7 @@ impl App {
                 );
                 match result {
                     Ok(comments) => {
-                        self.comments = comments;
+                        self.comment_tree.set(comments);
                         self.set_loading(false);
                     }
                     Err(e) => {
@@ -345,30 +344,7 @@ impl App {
     }
 
     pub fn visible_comment_indices(&self) -> Vec<usize> {
-        let mut visible = Vec::new();
-        let mut parent_visible_at_depth: Vec<bool> = vec![true];
-
-        for (i, comment) in self.comments.iter().enumerate() {
-            parent_visible_at_depth.truncate(comment.depth + 1);
-
-            let is_visible = parent_visible_at_depth
-                .get(comment.depth)
-                .copied()
-                .unwrap_or(false);
-
-            if is_visible {
-                visible.push(i);
-
-                let children_visible = self.expanded_comments.contains(&comment.id);
-                if parent_visible_at_depth.len() <= comment.depth + 1 {
-                    parent_visible_at_depth.push(children_visible);
-                } else {
-                    parent_visible_at_depth[comment.depth + 1] = children_visible;
-                }
-            }
-        }
-
-        visible
+        self.comment_tree.visible_indices()
     }
 
     fn actual_comment_index(&self, visible_index: usize) -> Option<usize> {
@@ -377,7 +353,7 @@ impl App {
 
     pub fn selected_comment(&self) -> Option<&Comment> {
         let actual_idx = self.actual_comment_index(self.selected_index)?;
-        self.comments.get(actual_idx)
+        self.comment_tree.get(actual_idx)
     }
 
     fn expand_comment(&mut self) {
@@ -386,11 +362,11 @@ impl App {
             && !comment.kids.is_empty()
         {
             let id = comment.id;
-            if self.expanded_comments.contains(&id) {
+            if self.comment_tree.is_expanded(id) {
                 // Already expanded - move to first child
                 self.selected_index += 1;
             } else {
-                self.expanded_comments.insert(id);
+                self.comment_tree.expand(id);
             }
         }
     }
@@ -405,120 +381,71 @@ impl App {
 
             let (id, depth) = (comment.id, comment.depth);
             let has_children = !comment.kids.is_empty();
-            let is_expanded = self.expanded_comments.contains(&id);
+            let is_expanded = self.comment_tree.is_expanded(id);
 
             if depth == 0 {
                 // Top-level: collapse if expanded with children, otherwise go back
                 if has_children && is_expanded {
-                    self.expanded_comments.remove(&id);
+                    self.comment_tree.collapse(id);
                 } else {
                     self.go_back();
                 }
                 return;
             }
 
-            self.expanded_comments.remove(&id);
+            self.comment_tree.collapse(id);
 
-            if self.selected_index > 0 {
-                let visible = self.visible_comment_indices();
-                for i in (0..self.selected_index).rev() {
-                    if let Some(&actual_idx) = visible.get(i)
-                        && self.comments[actual_idx].depth < depth
-                    {
-                        self.selected_index = i;
-                        return;
-                    }
-                }
+            // Navigate to parent
+            let visible = self.visible_comment_indices();
+            if let Some(parent_idx) = self
+                .comment_tree
+                .find_parent_visible_index(&visible, self.selected_index)
+            {
+                self.selected_index = parent_idx;
             }
         }
     }
 
     fn expand_subtree(&mut self) {
         if let View::Comments { .. } = self.view {
-            let Some(comment) = self.selected_comment() else {
-                return;
-            };
-            let start_depth = comment.depth;
-
-            // Find actual index of selected comment
             let Some(start_idx) = self.actual_comment_index(self.selected_index) else {
                 return;
             };
-
-            // Expand selected comment and all descendants
-            for i in start_idx..self.comments.len() {
-                let c = &self.comments[i];
-                if i > start_idx && c.depth <= start_depth {
-                    break;
-                }
-                if !c.kids.is_empty() {
-                    self.expanded_comments.insert(c.id);
-                }
-            }
+            self.comment_tree.expand_subtree(start_idx);
         }
     }
 
     fn collapse_subtree(&mut self) {
         if let View::Comments { .. } = self.view {
-            let Some(comment) = self.selected_comment() else {
+            let visible = self.visible_comment_indices();
+            let Some((ancestor_visible_idx, ancestor_actual_idx)) = self
+                .comment_tree
+                .find_toplevel_ancestor(&visible, self.selected_index)
+            else {
                 return;
             };
 
-            // Find the top-level ancestor
-            let mut ancestor_idx = self.selected_index;
-            let mut ancestor_actual_idx = self.actual_comment_index(self.selected_index);
-
-            if comment.depth > 0 {
-                let visible = self.visible_comment_indices();
-                for i in (0..self.selected_index).rev() {
-                    if let Some(&actual_idx) = visible.get(i)
-                        && self.comments[actual_idx].depth == 0
-                    {
-                        ancestor_idx = i;
-                        ancestor_actual_idx = Some(actual_idx);
-                        break;
-                    }
-                }
-            }
-
-            let Some(start_idx) = ancestor_actual_idx else {
-                return;
-            };
-
-            // Collapse the top-level ancestor and all its descendants
-            for i in start_idx..self.comments.len() {
-                let c = &self.comments[i];
-                if i > start_idx && c.depth == 0 {
-                    break;
-                }
-                self.expanded_comments.remove(&c.id);
-            }
-
-            // Move cursor to the top-level ancestor
-            self.selected_index = ancestor_idx;
+            self.comment_tree.collapse_subtree(ancestor_actual_idx);
+            self.selected_index = ancestor_visible_idx;
         }
     }
 
     fn expand_thread(&mut self) {
         if let View::Comments { .. } = self.view {
-            for c in &self.comments {
-                if !c.kids.is_empty() {
-                    self.expanded_comments.insert(c.id);
-                }
-            }
+            self.comment_tree.expand_all();
         }
     }
 
     fn collapse_thread(&mut self) {
         if let View::Comments { .. } = self.view {
-            self.expanded_comments.clear();
+            self.comment_tree.collapse_all();
         }
     }
 
     fn item_count(&self) -> usize {
         match self.view {
             View::Stories => self.stories.len(),
-            View::Comments { .. } => self.visible_comment_indices().len(),
+            View::Comments { .. } => self.comment_tree.visible_count(),
         }
     }
 
@@ -604,8 +531,7 @@ impl App {
                 story_scroll,
             };
             self.set_loading(true);
-            self.comments.clear();
-            self.expanded_comments.clear();
+            self.comment_tree.clear();
             self.selected_index = 0;
             self.scroll_offset = 0;
 
@@ -637,7 +563,7 @@ impl App {
         } = self.view
         {
             self.view = View::Stories;
-            self.comments.clear();
+            self.comment_tree.clear();
             self.selected_index = story_index;
             self.scroll_offset = story_scroll;
         }

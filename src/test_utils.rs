@@ -1,6 +1,6 @@
 //! Test data builders for view testing.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 
 use crate::api::{Comment, Feed, HnClient, Story};
 use crate::app::{App, View};
+use crate::comment_tree::CommentTree;
 use crate::theme::{ResolvedTheme, ThemeVariant, default_for_variant};
 use crate::time::{Clock, fixed_clock};
 
@@ -183,7 +184,7 @@ pub struct TestAppBuilder {
     feed: Feed,
     stories: Vec<Story>,
     comments: Vec<Comment>,
-    expanded_comments: HashSet<u64>,
+    expanded_ids: Vec<u64>,
     selected_index: usize,
     loading: bool,
     loading_start: Option<Instant>,
@@ -213,7 +214,7 @@ impl TestAppBuilder {
             feed: Feed::Top,
             stories: Vec::new(),
             comments: Vec::new(),
-            expanded_comments: HashSet::new(),
+            expanded_ids: Vec::new(),
             selected_index: 0,
             loading: false,
             loading_start: None,
@@ -251,7 +252,7 @@ impl TestAppBuilder {
     }
 
     pub fn expanded(mut self, ids: Vec<u64>) -> Self {
-        self.expanded_comments = ids.into_iter().collect();
+        self.expanded_ids = ids;
         self
     }
 
@@ -303,12 +304,19 @@ impl TestAppBuilder {
 
     pub fn build(self) -> App {
         let (result_tx, result_rx) = mpsc::channel(10);
+
+        // Build comment tree with expansion state
+        let mut comment_tree = CommentTree::new();
+        comment_tree.set(self.comments);
+        for id in self.expanded_ids {
+            comment_tree.expand(id);
+        }
+
         App {
             view: self.view,
             feed: self.feed,
             stories: self.stories,
-            comments: self.comments,
-            expanded_comments: self.expanded_comments,
+            comment_tree,
             selected_index: self.selected_index,
             loading: self.loading,
             loading_start: self.loading_start,

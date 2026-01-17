@@ -76,7 +76,7 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    if app.comments.is_empty() {
+    if app.comment_tree.is_empty() {
         let empty = Paragraph::new("No comments yet")
             .style(Style::default().fg(theme.foreground_dim))
             .block(
@@ -91,13 +91,13 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
 
     let content_width = area.width.saturating_sub(4) as usize;
     let visible_indices = app.visible_comment_indices();
-    let tree_context = compute_tree_context(&app.comments, &visible_indices);
+    let tree_context = compute_tree_context(app.comment_tree.comments(), &visible_indices);
     let items: Vec<ListItem> = visible_indices
         .iter()
         .enumerate()
         .map(|(vis_idx, &i)| {
-            let comment = &app.comments[i];
-            let is_expanded = app.expanded_comments.contains(&comment.id);
+            let comment = app.comment_tree.get(i).unwrap();
+            let is_expanded = app.comment_tree.is_expanded(comment.id);
             let has_more = &tree_context[vis_idx];
             comment_to_list_item(
                 comment,
@@ -115,7 +115,7 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(theme.border))
-                .title(format!("Comments ({})", app.comments.len())),
+                .title(format!("Comments ({})", app.comment_tree.len())),
         )
         .highlight_style(Style::default().bg(theme.selection_bg))
         .highlight_symbol("▶ ");
@@ -237,7 +237,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut status_bar = StatusBar::new(&app.theme)
         .label("Comments")
-        .position(app.selected_index + 1, app.comments.len())
+        .position(app.selected_index + 1, app.comment_tree.len())
         .help(help_text);
 
     if let Some(ref text) = loading_text {

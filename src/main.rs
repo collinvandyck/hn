@@ -1,6 +1,7 @@
 mod api;
 mod app;
 mod cli;
+mod comment_tree;
 mod event;
 mod keys;
 mod theme;
