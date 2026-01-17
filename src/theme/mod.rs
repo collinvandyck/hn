@@ -9,7 +9,6 @@ pub use loader::load_theme_file;
 use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
-/// Theme variant (dark or light)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ThemeVariant {
@@ -18,7 +17,6 @@ pub enum ThemeVariant {
     Light,
 }
 
-/// Serializable theme definition (for TOML files)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Theme {
     pub name: String,
@@ -35,7 +33,6 @@ pub struct ThemeMeta {
     pub variant: ThemeVariant,
 }
 
-/// Color representation supporting multiple formats
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ThemeColor {
@@ -93,88 +90,58 @@ impl ThemeColor {
     }
 }
 
-/// Serializable theme colors (for TOML)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeColors {
-    // Base colors
     pub foreground: ThemeColor,
     pub foreground_dim: ThemeColor,
     pub border: ThemeColor,
     pub selection_bg: ThemeColor,
-
-    // Semantic colors
     pub primary: ThemeColor,
     pub success: ThemeColor,
     pub warning: ThemeColor,
     pub error: ThemeColor,
     pub info: ThemeColor,
-
-    // Story-specific
     pub story_title: ThemeColor,
     pub story_domain: ThemeColor,
     pub story_score: ThemeColor,
     pub story_author: ThemeColor,
     pub story_comments: ThemeColor,
     pub story_time: ThemeColor,
-
-    // Comment-specific
     pub comment_text: ThemeColor,
     pub comment_depth_colors: Vec<ThemeColor>,
-
-    // Status bar
     pub status_bar_bg: ThemeColor,
     pub status_bar_fg: ThemeColor,
-
-    // Spinner
     pub spinner: ThemeColor,
 }
 
-/// Resolved theme with pre-converted ratatui Colors (for runtime use)
-///
-/// Some fields (name, variant, foreground, success, info) are part of the
-/// theme API for custom themes and future features, even if not currently
-/// used in the default UI rendering.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct ResolvedTheme {
     pub name: String,
     pub variant: ThemeVariant,
-
-    // Base colors
     pub foreground: Color,
     pub foreground_dim: Color,
     pub border: Color,
     pub selection_bg: Color,
-
-    // Semantic colors
     pub primary: Color,
     pub success: Color,
     pub warning: Color,
     pub error: Color,
     pub info: Color,
-
-    // Story-specific
     pub story_title: Color,
     pub story_domain: Color,
     pub story_score: Color,
     pub story_author: Color,
     pub story_comments: Color,
     pub story_time: Color,
-
-    // Comment-specific
     pub comment_text: Color,
     pub comment_depth_colors: Vec<Color>,
-
-    // Status bar
     pub status_bar_bg: Color,
     pub status_bar_fg: Color,
-
-    // Spinner
     pub spinner: Color,
 }
 
 impl ResolvedTheme {
-    /// Get depth color for comment nesting (cycles through available colors)
     pub fn depth_color(&self, depth: usize) -> Color {
         if self.comment_depth_colors.is_empty() {
             return self.primary;

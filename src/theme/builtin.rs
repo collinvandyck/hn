@@ -1,6 +1,5 @@
 use super::{ResolvedTheme, Theme, ThemeColor, ThemeColors, ThemeMeta, ThemeVariant};
 
-/// Get all built-in themes
 pub fn all_themes() -> Vec<Theme> {
     vec![
         default_dark(),
@@ -18,12 +17,10 @@ pub fn all_themes() -> Vec<Theme> {
     ]
 }
 
-/// Get a theme by name
 pub fn by_name(name: &str) -> Option<Theme> {
     all_themes().into_iter().find(|t| t.name == name)
 }
 
-/// Get the default theme for a variant
 pub fn default_for_variant(variant: ThemeVariant) -> ResolvedTheme {
     match variant {
         ThemeVariant::Dark => default_dark().into(),
@@ -39,7 +36,6 @@ fn hex(s: &str) -> ThemeColor {
     ThemeColor::Hex(s.to_string())
 }
 
-/// Default dark theme - matches the original hardcoded colors
 pub fn default_dark() -> Theme {
     Theme {
         name: "default-dark".to_string(),
@@ -80,7 +76,6 @@ pub fn default_dark() -> Theme {
     }
 }
 
-/// Default light theme
 pub fn default_light() -> Theme {
     Theme {
         name: "default-light".to_string(),
@@ -121,7 +116,6 @@ pub fn default_light() -> Theme {
     }
 }
 
-/// Monokai theme
 pub fn monokai() -> Theme {
     Theme {
         name: "monokai".to_string(),
@@ -162,7 +156,6 @@ pub fn monokai() -> Theme {
     }
 }
 
-/// Dracula theme
 pub fn dracula() -> Theme {
     Theme {
         name: "dracula".to_string(),
@@ -203,7 +196,6 @@ pub fn dracula() -> Theme {
     }
 }
 
-/// Nord theme
 pub fn nord() -> Theme {
     Theme {
         name: "nord".to_string(),
@@ -244,7 +236,6 @@ pub fn nord() -> Theme {
     }
 }
 
-/// Gruvbox dark theme
 pub fn gruvbox_dark() -> Theme {
     Theme {
         name: "gruvbox-dark".to_string(),
@@ -285,7 +276,6 @@ pub fn gruvbox_dark() -> Theme {
     }
 }
 
-/// Gruvbox light theme
 pub fn gruvbox_light() -> Theme {
     Theme {
         name: "gruvbox-light".to_string(),
@@ -326,7 +316,6 @@ pub fn gruvbox_light() -> Theme {
     }
 }
 
-/// Solarized dark theme
 pub fn solarized_dark() -> Theme {
     Theme {
         name: "solarized-dark".to_string(),
@@ -367,7 +356,6 @@ pub fn solarized_dark() -> Theme {
     }
 }
 
-/// Solarized light theme
 pub fn solarized_light() -> Theme {
     Theme {
         name: "solarized-light".to_string(),
@@ -408,7 +396,6 @@ pub fn solarized_light() -> Theme {
     }
 }
 
-/// Catppuccin Mocha (darkest)
 pub fn catppuccin_mocha() -> Theme {
     Theme {
         name: "catppuccin-mocha".to_string(),
@@ -449,7 +436,6 @@ pub fn catppuccin_mocha() -> Theme {
     }
 }
 
-/// Catppuccin Latte (light)
 pub fn catppuccin_latte() -> Theme {
     Theme {
         name: "catppuccin-latte".to_string(),
@@ -490,7 +476,6 @@ pub fn catppuccin_latte() -> Theme {
     }
 }
 
-/// Tokyo Night theme
 pub fn tokyo_night() -> Theme {
     Theme {
         name: "tokyo-night".to_string(),

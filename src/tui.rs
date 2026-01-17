@@ -14,7 +14,6 @@ use crate::event::Event;
 
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
 
-/// Initialize the terminal
 pub fn init() -> Result<Tui> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -24,14 +23,12 @@ pub fn init() -> Result<Tui> {
     Ok(terminal)
 }
 
-/// Restore the terminal to its original state
 pub fn restore() -> Result<()> {
     disable_raw_mode()?;
     execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
     Ok(())
 }
 
-/// Event handler that polls for terminal events
 pub struct EventHandler {
     event_stream: EventStream,
     tick_rate: Duration,
@@ -45,7 +42,6 @@ impl EventHandler {
         }
     }
 
-    /// Wait for the next event
     pub async fn next(&mut self) -> Result<Event> {
         let mut tick_interval = interval(self.tick_rate);
 
@@ -58,7 +54,6 @@ impl EventHandler {
                     if let Some(Ok(event)) = event {
                         match event {
                             CrosstermEvent::Key(key) => {
-                                // Filter for KeyPress only (cross-platform compatibility)
                                 if key.kind == crossterm::event::KeyEventKind::Press {
                                     return Ok(Event::Key(key));
                                 }

@@ -1,6 +1,5 @@
 use serde::Deserialize;
 
-/// Raw item from HN API - can be story, comment, job, poll, etc.
 #[derive(Debug, Deserialize)]
 pub struct HnItem {
     pub id: u64,
@@ -20,7 +19,6 @@ pub struct HnItem {
     pub dead: Option<bool>,
 }
 
-/// A story from Hacker News
 #[derive(Debug, Clone)]
 pub struct Story {
     pub id: u64,
@@ -47,7 +45,6 @@ impl Story {
         })
     }
 
-    /// Returns the domain from the URL, or "self" for text posts
     pub fn domain(&self) -> &str {
         self.url
             .as_ref()
@@ -61,7 +58,6 @@ impl Story {
     }
 }
 
-/// A comment from Hacker News
 #[derive(Debug, Clone)]
 pub struct Comment {
     pub id: u64,
@@ -75,7 +71,6 @@ pub struct Comment {
 
 impl Comment {
     pub fn from_item(item: HnItem, depth: usize) -> Option<Self> {
-        // Skip deleted or dead comments
         if item.deleted.unwrap_or(false) || item.dead.unwrap_or(false) {
             return None;
         }
@@ -91,7 +86,6 @@ impl Comment {
     }
 }
 
-/// Feed types available on HN
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Feed {
     #[default]

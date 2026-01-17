@@ -11,7 +11,6 @@ use crate::api::Comment;
 use crate::app::{App, View};
 use crate::theme::ResolvedTheme;
 
-/// Render the comments view
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let story_title = match &app.view {
         View::Comments { story_title, .. } => story_title.clone(),
@@ -68,10 +67,7 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    // Calculate available width for text (account for borders and indent)
-    let content_width = area.width.saturating_sub(4) as usize; // 2 for borders, 2 for padding
-
-    // Get only visible comments based on expansion state
+    let content_width = area.width.saturating_sub(4) as usize;
     let visible_indices = app.visible_comment_indices();
     let items: Vec<ListItem> = visible_indices
         .iter()
@@ -95,8 +91,6 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     let mut state = ListState::default();
     state.select(Some(app.selected_index));
 
-    // Center the selected item (scrolloff behavior)
-    // Estimate ~4 lines per comment on average for visible item calculation
     let visible_count = visible_indices.len();
     let visible_items = (area.height.saturating_sub(2) / 4).max(1) as usize;
     let half = visible_items / 2;
@@ -113,7 +107,6 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, 
     let indent = " ".repeat(indent_width);
     let has_children = !comment.kids.is_empty();
 
-    // Depth marker with color
     let depth_marker = if comment.depth > 0 {
         Span::styled(
             format!("{}├─ ", &indent[..indent_width.saturating_sub(3)]),
@@ -123,7 +116,6 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, 
         Span::raw("")
     };
 
-    // Collapse/expand indicator (fixed width for alignment)
     let expand_indicator = if has_children {
         if is_expanded {
             Span::styled("[-] ", Style::default().fg(theme.foreground_dim))
@@ -134,7 +126,6 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, 
         Span::styled("[ ] ", Style::default().fg(theme.foreground_dim))
     };
 
-    // Child count for RHS (only show if has children)
     let child_info = if has_children {
         vec![
             Span::styled(" · ", Style::default().fg(theme.foreground_dim)),
@@ -147,7 +138,6 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, 
         vec![]
     };
 
-    // Author line with colored marker
     let mut meta_spans = vec![
         depth_marker,
         expand_indicator,
@@ -161,20 +151,15 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, 
     meta_spans.extend(child_info);
     let meta_line = Line::from(meta_spans);
 
-    // If collapsed with children, show only meta line
     if has_children && !is_expanded {
         return ListItem::new(vec![meta_line, Line::from("")]);
     }
 
-    // Process and wrap comment text
     let text = strip_html(&comment.text);
-    let text_indent = indent.clone() + "      "; // Extra indent for text body (accounts for expand indicator)
+    let text_indent = indent.clone() + "      ";
     let available_width = max_width.saturating_sub(text_indent.len()).max(20);
-
-    // Wrap text to fit available width
     let wrapped_lines = wrap_text(&text, available_width);
 
-    // Build text lines with proper indentation
     let mut lines = vec![meta_line];
 
     for wrapped_line in wrapped_lines {
@@ -184,13 +169,11 @@ fn comment_to_list_item(comment: &Comment, max_width: usize, is_expanded: bool, 
         ]));
     }
 
-    // Add empty line for spacing between comments
     lines.push(Line::from(""));
 
     ListItem::new(lines)
 }
 
-/// Wrap text to specified width, preserving words
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
     if text.is_empty() {
         return vec![];
@@ -220,7 +203,6 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         Span::raw(" "),
     ];
 
-    // Show spinner when loading
     if app.loading {
         spans.push(Span::styled(
             format!("{} Loading... ", spinner_frame(app.loading_start)),
@@ -264,7 +246,6 @@ fn format_time(timestamp: u64) -> String {
 }
 
 fn strip_html(html: &str) -> String {
-    // Convert HTML to readable text
     html.replace("<p>", "\n\n")
         .replace("</p>", "")
         .replace("<br>", "\n")
@@ -285,7 +266,6 @@ fn strip_html(html: &str) -> String {
         .replace("&#x27;", "'")
         .replace("&#39;", "'")
         .replace("&#x2F;", "/")
-        // Strip links but keep text
         .split("<a ")
         .enumerate()
         .map(|(i, part)| {
@@ -304,7 +284,6 @@ fn strip_html(html: &str) -> String {
             }
         })
         .collect::<String>()
-        // Clean up whitespace
         .lines()
         .map(|l| l.trim())
         .collect::<Vec<_>>()
@@ -449,7 +428,6 @@ mod tests {
                 .build(),
         ];
 
-        // Don't expand comment 1, so replies should be hidden
         let app = TestAppBuilder::new()
             .with_comments(comments)
             .view(View::Comments {
@@ -464,10 +442,8 @@ mod tests {
             render(frame, &app, frame.area());
         });
 
-        // Should show [+] indicator and "2 replies" but not the reply text
         assert!(output.contains("[+]"));
         assert!(output.contains("2 replies"));
-        // The reply text should not be visible
         assert!(!output.contains("Hidden reply"));
     }
 

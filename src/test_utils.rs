@@ -1,6 +1,4 @@
-//! Test utilities for creating mock data and test App instances.
-//!
-//! This module provides builder patterns for creating test fixtures with sensible defaults.
+//! Test data builders for view testing.
 
 use std::collections::HashSet;
 use std::time::Instant;
@@ -9,9 +7,6 @@ use crate::api::{Comment, Feed, HnClient, Story};
 use crate::app::{App, View};
 use crate::theme::{default_for_variant, ResolvedTheme, ThemeVariant};
 
-/// Builder for creating test Story instances.
-///
-/// All builder methods are provided for completeness, even if not currently used.
 #[allow(dead_code)]
 pub struct StoryBuilder {
     id: u64,
@@ -39,7 +34,7 @@ impl StoryBuilder {
             url: Some("https://example.com".to_string()),
             score: 100,
             by: "testuser".to_string(),
-            time: 1700000000, // Some reasonable timestamp
+            time: 1700000000,
             descendants: 10,
             kids: vec![],
         }
@@ -104,7 +99,6 @@ impl StoryBuilder {
     }
 }
 
-/// Builder for creating test Comment instances.
 pub struct CommentBuilder {
     id: u64,
     text: String,
@@ -174,9 +168,6 @@ impl CommentBuilder {
     }
 }
 
-/// Builder for creating test App instances.
-///
-/// All builder methods are provided for completeness, even if not currently used.
 #[allow(dead_code)]
 pub struct TestAppBuilder {
     view: View,
@@ -294,7 +285,6 @@ impl TestAppBuilder {
     }
 }
 
-/// Create a standard set of test stories for snapshot testing.
 pub fn sample_stories() -> Vec<Story> {
     vec![
         StoryBuilder::new()
@@ -345,7 +335,6 @@ pub fn sample_stories() -> Vec<Story> {
     ]
 }
 
-/// Create a standard comment thread for snapshot testing.
 pub fn sample_comments() -> Vec<Comment> {
     vec![
         CommentBuilder::new()

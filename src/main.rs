@@ -29,12 +29,9 @@ use tui::EventHandler;
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Handle subcommands first
     if let Some(Commands::Theme(theme_args)) = cli.command {
         return handle_theme_command(theme_args);
     }
-
-    // Run the TUI
     run_tui(cli).await
 }
 
@@ -86,7 +83,6 @@ fn handle_theme_command(args: ThemeArgs) -> Result<()> {
 }
 
 fn resolve_theme(cli: &Cli) -> Result<ResolvedTheme> {
-    // Determine variant (explicit flag > auto-detect)
     let variant = if cli.dark {
         ThemeVariant::Dark
     } else if cli.light {
@@ -95,21 +91,17 @@ fn resolve_theme(cli: &Cli) -> Result<ResolvedTheme> {
         detect_terminal_theme()
     };
 
-    // Load theme (--theme flag > default for variant)
     if let Some(theme_arg) = &cli.theme {
-        // Check if it's a file path
         let path = Path::new(theme_arg);
         if path.exists() && path.extension().map(|e| e == "toml").unwrap_or(false) {
             let theme = load_theme_file(path)?;
             return Ok(theme.into());
         }
 
-        // Try as a built-in theme name
         if let Some(theme) = by_name(theme_arg) {
             return Ok(theme.into());
         }
 
-        // Check custom themes directory
         if let Some(custom_dir) = cli::custom_themes_dir() {
             let custom_path = custom_dir.join(format!("{}.toml", theme_arg));
             if custom_path.exists() {
@@ -128,40 +120,23 @@ fn resolve_theme(cli: &Cli) -> Result<ResolvedTheme> {
 }
 
 async fn run_tui(cli: Cli) -> Result<()> {
-    // Resolve theme from CLI args
     let resolved_theme = resolve_theme(&cli)?;
-
-    // Initialize terminal
     let mut terminal = tui::init()?;
-
-    // Create app and event handler
     let mut app = App::new(resolved_theme);
-    let mut events = EventHandler::new(250); // 250ms tick rate
+    let mut events = EventHandler::new(250);
 
-    // Load initial stories
     app.load_stories().await;
 
-    // Main loop
     loop {
-        // Render
         terminal.draw(|frame| render(&app, frame))?;
 
-        // Handle events
         match events.next().await? {
             Event::Key(key) => {
                 if let Some(msg) = keys::handle_key(key, &app) {
                     app.update(msg).await;
                 }
             }
-            Event::Tick => {
-                // Could update timers or check for new data here
-            }
-            Event::Resize => {
-                // Terminal handles resize automatically
-            }
-            Event::Mouse => {
-                // Mouse support can be added later
-            }
+            Event::Tick | Event::Resize | Event::Mouse => {}
         }
 
         if app.should_quit {
@@ -169,9 +144,7 @@ async fn run_tui(cli: Cli) -> Result<()> {
         }
     }
 
-    // Restore terminal
     tui::restore()?;
-
     Ok(())
 }
 

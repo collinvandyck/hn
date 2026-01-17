@@ -10,7 +10,6 @@ use crate::api::{Feed, Story};
 use crate::app::App;
 use crate::theme::ResolvedTheme;
 
-/// Render the stories list view
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::vertical([
         Constraint::Length(1), // Feed tabs
@@ -146,7 +145,6 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         Span::raw(" "),
     ];
 
-    // Show spinner when loading
     if app.loading {
         spans.push(Span::styled(
             format!("{} Loading... ", spinner_frame(app.loading_start)),
@@ -233,7 +231,6 @@ mod tests {
             render(frame, &app, frame.area());
         });
 
-        // Loading state should show "Loading..." text
         assert!(output.contains("Loading"));
     }
 
@@ -247,7 +244,6 @@ mod tests {
             render(frame, &app, frame.area());
         });
 
-        // Error state should show the error message
         assert!(output.contains("connection timeout"));
     }
 
@@ -273,7 +269,6 @@ mod tests {
             render(frame, &app, frame.area());
         });
 
-        // Help text should be expanded
         assert!(output.contains("j/k:nav"));
     }
 }

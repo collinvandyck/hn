@@ -4,14 +4,12 @@ use std::time::Instant;
 use crate::api::{Comment, Feed, HnClient, Story};
 use crate::theme::ResolvedTheme;
 
-/// Current view in the application
 #[derive(Debug, Clone, PartialEq)]
 pub enum View {
     Stories,
     Comments {
         story_id: u64,
         story_title: String,
-        /// Saved story view state for restoration on back
         story_index: usize,
         story_scroll: usize,
     },
@@ -23,18 +21,14 @@ impl Default for View {
     }
 }
 
-/// Messages that can update the application state
 #[derive(Debug, Clone)]
 pub enum Message {
-    // Navigation
     SelectNext,
     SelectPrev,
     SelectFirst,
     SelectLast,
     PageDown,
     PageUp,
-
-    // Actions
     OpenUrl,
     OpenComments,
     OpenCommentsUrl,
@@ -44,14 +38,11 @@ pub enum Message {
     Quit,
     Refresh,
     ToggleHelp,
-
-    // Feed switching
     SwitchFeed(Feed),
     NextFeed,
     PrevFeed,
 }
 
-/// Application state
 pub struct App {
     pub view: View,
     pub feed: Feed,
@@ -89,15 +80,12 @@ impl App {
         }
     }
 
-    /// Set loading state with timestamp for spinner animation
     fn set_loading(&mut self, loading: bool) {
         self.loading = loading;
         self.loading_start = if loading { Some(Instant::now()) } else { None };
     }
 
-    /// Update the app state based on a message
     pub async fn update(&mut self, msg: Message) {
-        // Clear any previous error on new actions
         self.error = None;
 
         match msg {
@@ -122,7 +110,6 @@ impl App {
         }
     }
 
-    /// Get indices of visible comments (respecting collapse state)
     pub fn visible_comment_indices(&self) -> Vec<usize> {
         let mut visible = Vec::new();
         let mut parent_visible_at_depth: Vec<bool> = vec![true];
@@ -150,12 +137,10 @@ impl App {
         visible
     }
 
-    /// Get the actual comment index from visible index
     fn actual_comment_index(&self, visible_index: usize) -> Option<usize> {
         self.visible_comment_indices().get(visible_index).copied()
     }
 
-    /// Get currently selected comment
     pub fn selected_comment(&self) -> Option<&Comment> {
         let actual_idx = self.actual_comment_index(self.selected_index)?;
         self.comments.get(actual_idx)
@@ -179,13 +164,11 @@ impl App {
                 None => return,
             };
 
-            // Always collapse current comment first
             self.expanded_comments.remove(&id);
 
-            // If child comment, also move to parent
+            // If child comment, move selection to parent
             if depth > 0 && self.selected_index > 0 {
                 let visible = self.visible_comment_indices();
-                // Walk backwards to find parent (first comment with lower depth)
                 for i in (0..self.selected_index).rev() {
                     if let Some(&actual_idx) = visible.get(i) {
                         if self.comments[actual_idx].depth < depth {
@@ -247,10 +230,10 @@ impl App {
             View::Comments { story_index, .. } => self.stories.get(*story_index),
         };
         if let Some(story) = story {
-            // Use story URL if available, otherwise fall back to HN discussion page
-            let url = story.url.clone().unwrap_or_else(|| {
-                format!("https://news.ycombinator.com/item?id={}", story.id)
-            });
+            let url = story
+                .url
+                .clone()
+                .unwrap_or_else(|| format!("https://news.ycombinator.com/item?id={}", story.id));
             let _ = open::that(url);
         }
     }
@@ -264,7 +247,6 @@ impl App {
                 }
             }
             View::Comments { .. } => {
-                // Open permalink for the selected comment
                 if let Some(comment) = self.selected_comment() {
                     let url = format!("https://news.ycombinator.com/item?id={}", comment.id);
                     let _ = open::that(url);
@@ -276,7 +258,6 @@ impl App {
     async fn open_comments(&mut self) {
         if let View::Stories = self.view {
             if let Some(story) = self.stories.get(self.selected_index).cloned() {
-                // Save story view state before switching
                 let story_index = self.selected_index;
                 let story_scroll = self.scroll_offset;
 
@@ -316,7 +297,6 @@ impl App {
     }
 
     async fn refresh(&mut self) {
-        // Clear cache to force fresh data
         self.client.clear_cache().await;
 
         match &self.view {
@@ -357,7 +337,6 @@ impl App {
         self.switch_feed(feeds[new_idx]).await;
     }
 
-    /// Load stories for the current feed
     pub async fn load_stories(&mut self) {
         self.set_loading(true);
         self.error = None;

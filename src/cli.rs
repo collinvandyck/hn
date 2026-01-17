@@ -73,7 +73,6 @@ impl std::str::FromStr for OutputFormat {
     }
 }
 
-/// Get the path for custom themes
 pub fn custom_themes_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|p| p.join("lima-hn").join("themes"))
 }

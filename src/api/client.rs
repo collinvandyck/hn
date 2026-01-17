@@ -21,7 +21,6 @@ impl<T> CacheEntry<T> {
     }
 }
 
-/// Async client for the Hacker News API
 pub struct HnClient {
     http: reqwest::Client,
     item_cache: Arc<RwLock<HashMap<u64, CacheEntry<HnItem>>>>,
@@ -38,12 +37,10 @@ impl HnClient {
         }
     }
 
-    /// Clear the item cache to force fresh fetches
     pub async fn clear_cache(&self) {
         self.item_cache.write().await.clear();
     }
 
-    /// Fetch story IDs for a feed
     pub async fn fetch_feed_ids(&self, feed: Feed) -> Result<Vec<u64>> {
         let url = format!("{}/{}.json", API_BASE, feed.endpoint());
         let ids: Vec<u64> = self
@@ -58,9 +55,7 @@ impl HnClient {
         Ok(ids)
     }
 
-    /// Fetch a single item by ID
     async fn fetch_item(&self, id: u64) -> Result<HnItem> {
-        // Check cache first
         {
             let cache = self.item_cache.read().await;
             if let Some(entry) = cache.get(&id) {
@@ -70,7 +65,6 @@ impl HnClient {
             }
         }
 
-        // Fetch from API
         let url = format!("{}/item/{}.json", API_BASE, id);
         let item: HnItem = self
             .http
@@ -82,7 +76,6 @@ impl HnClient {
             .await
             .context("Failed to parse item")?;
 
-        // Cache the result
         {
             let mut cache = self.item_cache.write().await;
             cache.insert(
@@ -97,7 +90,6 @@ impl HnClient {
         Ok(item)
     }
 
-    /// Fetch a page of stories from a feed
     pub async fn fetch_stories(&self, feed: Feed, page: usize) -> Result<Vec<Story>> {
         let ids = self.fetch_feed_ids(feed).await?;
         let start = page * PAGE_SIZE;
@@ -111,7 +103,6 @@ impl HnClient {
         self.fetch_stories_by_ids(page_ids).await
     }
 
-    /// Fetch stories by their IDs concurrently
     pub async fn fetch_stories_by_ids(&self, ids: &[u64]) -> Result<Vec<Story>> {
         let futures: Vec<_> = ids.iter().map(|&id| self.fetch_item(id)).collect();
         let results = futures::future::join_all(futures).await;
@@ -125,33 +116,26 @@ impl HnClient {
         Ok(stories)
     }
 
-    /// Fetch comments for a story in depth-first order (like HN web)
-    /// Uses parallel fetching at each depth level for performance,
-    /// then reorders to DFS for correct threading display
+    /// Fetches comments using BFS for parallelism, then reorders to DFS for display
     pub async fn fetch_comments_flat(
         &self,
         story: &Story,
         max_depth: usize,
     ) -> Result<Vec<Comment>> {
-        // Phase 1: BFS fetch - collect all items in parallel by level
         let mut items: HashMap<u64, HnItem> = HashMap::new();
         let mut to_fetch: Vec<u64> = story.kids.clone();
         let mut depth = 0;
 
         while !to_fetch.is_empty() && depth <= max_depth {
-            // Fetch current level in parallel
             let futures: Vec<_> = to_fetch.iter().map(|&id| self.fetch_item(id)).collect();
             let results = futures::future::join_all(futures).await;
 
-            // Collect results and queue children for next level
             let mut next_fetch = Vec::new();
             for (id, result) in to_fetch.into_iter().zip(results) {
                 if let Ok(item) = result {
-                    // Skip deleted/dead comments
                     if item.deleted.unwrap_or(false) || item.dead.unwrap_or(false) {
                         continue;
                     }
-                    // Queue children for next depth level
                     if depth < max_depth {
                         next_fetch.extend(&item.kids);
                     }
@@ -162,19 +146,17 @@ impl HnClient {
             depth += 1;
         }
 
-        // Phase 2: DFS traversal to produce correctly ordered output
         let mut comments = Vec::new();
         let mut stack: Vec<(u64, usize)> = story.kids.iter().rev().map(|&id| (id, 0)).collect();
 
         while let Some((id, depth)) = stack.pop() {
             if let Some(item) = items.remove(&id) {
-                // Add children to stack in reverse order (so first child is processed first)
+                // Reverse order so first child is processed first
                 for &kid_id in item.kids.iter().rev() {
                     if items.contains_key(&kid_id) {
                         stack.push((kid_id, depth + 1));
                     }
                 }
-                // Create comment
                 if let Some(comment) = Comment::from_item(item, depth) {
                     comments.push(comment);
                 }
@@ -200,7 +182,6 @@ impl Clone for HnClient {
     }
 }
 
-// Implement Clone for HnItem to enable caching
 impl Clone for HnItem {
     fn clone(&self) -> Self {
         Self {
