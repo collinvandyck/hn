@@ -7,17 +7,17 @@ use crate::api::{Comment, Feed, HnClient, Story};
 use crate::theme::ResolvedTheme;
 
 pub enum AsyncResult {
-    StoriesLoaded {
+    Stories {
         generation: u64,
         task_id: u64,
         result: Result<Vec<Story>, String>,
     },
-    MoreStoriesLoaded {
+    MoreStories {
         generation: u64,
         task_id: u64,
         result: Result<Vec<Story>, String>,
     },
-    CommentsLoaded {
+    Comments {
         story_id: u64,
         task_id: u64,
         result: Result<Vec<Comment>, String>,
@@ -182,7 +182,7 @@ impl App {
 
     pub fn handle_async_result(&mut self, result: AsyncResult) {
         match result {
-            AsyncResult::StoriesLoaded {
+            AsyncResult::Stories {
                 generation,
                 task_id,
                 result,
@@ -215,7 +215,7 @@ impl App {
                     }
                 }
             }
-            AsyncResult::MoreStoriesLoaded {
+            AsyncResult::MoreStories {
                 generation,
                 task_id,
                 result,
@@ -251,7 +251,7 @@ impl App {
                     }
                 }
             }
-            AsyncResult::CommentsLoaded {
+            AsyncResult::Comments {
                 story_id,
                 task_id,
                 result,
@@ -505,7 +505,7 @@ impl App {
                     .await
                     .map_err(|e| e.to_string());
                 let _ = tx
-                    .send(AsyncResult::CommentsLoaded {
+                    .send(AsyncResult::Comments {
                         story_id,
                         task_id,
                         result,
@@ -552,7 +552,7 @@ impl App {
                         .await
                         .map_err(|e| e.to_string());
                     let _ = tx
-                        .send(AsyncResult::StoriesLoaded {
+                        .send(AsyncResult::Stories {
                             generation,
                             task_id,
                             result,
@@ -576,7 +576,7 @@ impl App {
                             .await
                             .map_err(|e| e.to_string());
                         let _ = tx
-                            .send(AsyncResult::CommentsLoaded {
+                            .send(AsyncResult::Comments {
                                 story_id,
                                 task_id,
                                 result,
@@ -623,7 +623,7 @@ impl App {
                 .await
                 .map_err(|e| e.to_string());
             let _ = tx
-                .send(AsyncResult::StoriesLoaded {
+                .send(AsyncResult::Stories {
                     generation,
                     task_id,
                     result,
@@ -680,7 +680,7 @@ impl App {
                 .await
                 .map_err(|e| e.to_string());
             let _ = tx
-                .send(AsyncResult::MoreStoriesLoaded {
+                .send(AsyncResult::MoreStories {
                     generation,
                     task_id,
                     result,
