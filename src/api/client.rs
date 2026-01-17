@@ -38,6 +38,11 @@ impl HnClient {
         }
     }
 
+    /// Clear the item cache to force fresh fetches
+    pub async fn clear_cache(&self) {
+        self.item_cache.write().await.clear();
+    }
+
     /// Fetch story IDs for a feed
     pub async fn fetch_feed_ids(&self, feed: Feed) -> Result<Vec<u64>> {
         let url = format!("{}/{}.json", API_BASE, feed.endpoint());

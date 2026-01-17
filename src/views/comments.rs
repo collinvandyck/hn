@@ -98,6 +98,15 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut state = ListState::default();
     state.select(Some(app.selected_index));
+
+    // Center the selected item (scrolloff behavior)
+    // Estimate ~4 lines per comment on average for visible item calculation
+    let visible_items = (area.height.saturating_sub(2) / 4).max(1) as usize;
+    let half = visible_items / 2;
+    let max_offset = app.comments.len().saturating_sub(visible_items);
+    let offset = app.selected_index.saturating_sub(half).min(max_offset);
+    *state.offset_mut() = offset;
+
     frame.render_stateful_widget(list, area, &mut state);
 }
 

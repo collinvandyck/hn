@@ -225,6 +225,9 @@ impl App {
     }
 
     async fn refresh(&mut self) {
+        // Clear cache to force fresh data
+        self.client.clear_cache().await;
+
         match &self.view {
             View::Stories => {
                 self.load_stories().await;
