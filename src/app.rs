@@ -27,6 +27,7 @@ pub enum Message {
     // Actions
     OpenUrl,
     OpenComments,
+    OpenCommentsUrl,
     Back,
     Quit,
     Refresh,
@@ -88,6 +89,7 @@ impl App {
             Message::PageUp => self.page_up(),
             Message::OpenUrl => self.open_url(),
             Message::OpenComments => self.open_comments().await,
+            Message::OpenCommentsUrl => self.open_comments_url(),
             Message::Back => self.go_back(),
             Message::Quit => self.should_quit = true,
             Message::Refresh => self.refresh().await,
@@ -146,6 +148,17 @@ impl App {
                     let _ = open::that(url);
                 }
             }
+        }
+    }
+
+    fn open_comments_url(&self) {
+        let story_id = match &self.view {
+            View::Stories => self.stories.get(self.selected_index).map(|s| s.id),
+            View::Comments { story_id, .. } => Some(*story_id),
+        };
+        if let Some(id) = story_id {
+            let url = format!("https://news.ycombinator.com/item?id={}", id);
+            let _ = open::that(url);
         }
     }
 

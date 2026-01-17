@@ -2,12 +2,27 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
+use textwrap;
 
 use crate::api::Comment;
 use crate::app::{App, View};
+
+/// Colors for different nesting depths (cycles after 6)
+const DEPTH_COLORS: [Color; 6] = [
+    Color::Cyan,
+    Color::Green,
+    Color::Yellow,
+    Color::Magenta,
+    Color::Blue,
+    Color::Red,
+];
+
+fn depth_color(depth: usize) -> Color {
+    DEPTH_COLORS[depth % DEPTH_COLORS.len()]
+}
 
 /// Render the comments view
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
@@ -30,8 +45,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
 fn render_header(frame: &mut Frame, title: &str, area: Rect) {
     let header = Paragraph::new(title)
-        .style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
-        .wrap(Wrap { trim: true });
+        .style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        );
     frame.render_widget(header, area);
 }
 
@@ -60,10 +78,13 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
+    // Calculate available width for text (account for borders and indent)
+    let content_width = area.width.saturating_sub(4) as usize; // 2 for borders, 2 for padding
+
     let items: Vec<ListItem> = app
         .comments
         .iter()
-        .map(comment_to_list_item)
+        .map(|c| comment_to_list_item(c, content_width))
         .collect();
 
     let list = List::new(items)
@@ -72,11 +93,7 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
                 .borders(Borders::ALL)
                 .title(format!("Comments ({})", app.comments.len())),
         )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
+        .highlight_style(Style::default().bg(Color::Rgb(40, 40, 40)))
         .highlight_symbol("▶ ");
 
     let mut state = ListState::default();
@@ -84,47 +101,73 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, area, &mut state);
 }
 
-fn comment_to_list_item(comment: &Comment) -> ListItem<'static> {
-    // Depth indicator with visual indentation
-    let indent = "  ".repeat(comment.depth);
+fn comment_to_list_item(comment: &Comment, max_width: usize) -> ListItem<'static> {
+    let color = depth_color(comment.depth);
+    let indent_width = comment.depth * 2;
+    let indent = " ".repeat(indent_width);
+
+    // Depth marker with color
     let depth_marker = if comment.depth > 0 {
-        format!("{}└─ ", indent)
-    } else {
-        String::new()
-    };
-
-    // Author and time
-    let meta_line = Line::from(vec![
-        Span::raw(depth_marker.clone()),
-        Span::styled(comment.by.clone(), Style::default().fg(Color::Cyan)),
-        Span::raw(" • "),
         Span::styled(
-            format_time(comment.time),
-            Style::default().fg(Color::DarkGray),
-        ),
-    ]);
-
-    // Comment text - strip HTML and truncate
-    let text = strip_html(&comment.text);
-    let truncated = if text.len() > 200 {
-        format!("{}...", &text[..200])
+            format!("{}├─ ", &indent[..indent_width.saturating_sub(3)]),
+            Style::default().fg(color),
+        )
     } else {
-        text
+        Span::raw("")
     };
 
-    let text_line = Line::from(vec![
-        Span::raw(format!("{}  ", "  ".repeat(comment.depth))),
-        Span::styled(truncated, Style::default().fg(Color::White)),
+    // Author line with colored marker
+    let meta_line = Line::from(vec![
+        depth_marker,
+        Span::styled(
+            comment.by.clone(),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" · ", Style::default().fg(Color::DarkGray)),
+        Span::styled(format_time(comment.time), Style::default().fg(Color::DarkGray)),
     ]);
 
-    ListItem::new(vec![meta_line, text_line, Line::from("")])
+    // Process and wrap comment text
+    let text = strip_html(&comment.text);
+    let text_indent = indent.clone() + "  "; // Extra indent for text body
+    let available_width = max_width.saturating_sub(text_indent.len()).max(20);
+
+    // Wrap text to fit available width
+    let wrapped_lines = wrap_text(&text, available_width);
+
+    // Build text lines with proper indentation
+    let mut lines = vec![meta_line];
+
+    for wrapped_line in wrapped_lines {
+        lines.push(Line::from(vec![
+            Span::styled(text_indent.clone(), Style::default().fg(Color::DarkGray)),
+            Span::styled(wrapped_line, Style::default().fg(Color::White)),
+        ]));
+    }
+
+    // Add empty line for spacing between comments
+    lines.push(Line::from(""));
+
+    ListItem::new(lines)
+}
+
+/// Wrap text to specified width, preserving words
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    if text.is_empty() {
+        return vec![];
+    }
+
+    textwrap::wrap(text, width)
+        .into_iter()
+        .map(|cow| cow.into_owned())
+        .collect()
 }
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let help_text = if app.show_help {
-        "j/k:nav  g/G:top/bottom  h/Esc:back  r:refresh  q:quit  ?:hide help"
+        "j/k:nav  g/G:top/bottom  c:HN comments  h/Esc:back  r:refresh  q:quit  ?:hide"
     } else {
-        "h:back  ?:help  q:quit"
+        "c:HN  h:back  ?:help  q:quit"
     };
 
     let status = Line::from(vec![
@@ -166,33 +209,52 @@ fn format_time(timestamp: u64) -> String {
 }
 
 fn strip_html(html: &str) -> String {
-    // Simple HTML stripping - replace common tags and entities
-    html.replace("<p>", "\n")
+    // Convert HTML to readable text
+    html.replace("<p>", "\n\n")
         .replace("</p>", "")
         .replace("<br>", "\n")
         .replace("<br/>", "\n")
         .replace("<br />", "\n")
-        .replace("<i>", "")
-        .replace("</i>", "")
-        .replace("<b>", "")
-        .replace("</b>", "")
+        .replace("<i>", "_")
+        .replace("</i>", "_")
+        .replace("<b>", "*")
+        .replace("</b>", "*")
         .replace("<code>", "`")
         .replace("</code>", "`")
-        .replace("<pre>", "")
-        .replace("</pre>", "")
+        .replace("<pre>", "\n```\n")
+        .replace("</pre>", "\n```\n")
         .replace("&gt;", ">")
         .replace("&lt;", "<")
         .replace("&amp;", "&")
         .replace("&quot;", "\"")
         .replace("&#x27;", "'")
         .replace("&#39;", "'")
-        .replace("<a href=\"", "[")
-        .replace("\" rel=\"nofollow\">", "](")
-        .replace("</a>", ")")
+        .replace("&#x2F;", "/")
+        // Strip links but keep text
+        .split("<a ")
+        .enumerate()
+        .map(|(i, part)| {
+            if i == 0 {
+                part.to_string()
+            } else {
+                // Find the link text between > and </a>
+                if let Some(start) = part.find('>') {
+                    if let Some(end) = part.find("</a>") {
+                        let link_text = &part[start + 1..end];
+                        let rest = &part[end + 4..];
+                        return format!("{}{}", link_text, rest);
+                    }
+                }
+                part.to_string()
+            }
+        })
+        .collect::<String>()
+        // Clean up whitespace
         .lines()
         .map(|l| l.trim())
         .collect::<Vec<_>>()
         .join(" ")
-        .trim()
-        .to_string()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }

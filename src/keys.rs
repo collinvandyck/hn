@@ -38,6 +38,7 @@ fn handle_stories_key(key: KeyEvent) -> Option<Message> {
         // Actions
         KeyCode::Char('o') => Some(Message::OpenUrl),
         KeyCode::Char('l') | KeyCode::Enter => Some(Message::OpenComments),
+        KeyCode::Char('c') => Some(Message::OpenCommentsUrl),
         KeyCode::Char('r') => Some(Message::Refresh),
 
         // Feed switching
@@ -71,6 +72,7 @@ fn handle_comments_key(key: KeyEvent) -> Option<Message> {
 
         // Actions
         KeyCode::Char('o') => Some(Message::OpenUrl),
+        KeyCode::Char('c') => Some(Message::OpenCommentsUrl),
         KeyCode::Char('h') | KeyCode::Esc => Some(Message::Back),
         KeyCode::Char('r') => Some(Message::Refresh),
 
