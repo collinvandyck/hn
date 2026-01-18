@@ -38,7 +38,11 @@ async fn main() -> Result<()> {
     if let Some(Commands::Theme(theme_args)) = &cli.command {
         return handle_theme_command(theme_args, cli.config_dir.as_ref());
     }
-    run_tui(cli).await
+
+    let terminal = tui::init()?;
+    let result = run_tui(cli, terminal).await;
+    tui::restore()?;
+    result
 }
 
 fn handle_theme_command(args: &ThemeArgs, custom_config_dir: Option<&PathBuf>) -> Result<()> {
@@ -77,11 +81,9 @@ fn handle_theme_command(args: &ThemeArgs, custom_config_dir: Option<&PathBuf>) -
             }
         }
         ThemeCommands::Path => {
-            if let Some(config_dir) = settings::config_dir(custom_config_dir) {
-                println!("{}", settings::themes_dir(&config_dir).display());
-            } else {
-                eprintln!("Could not determine config directory");
-            }
+            let config_dir = settings::config_dir(custom_config_dir)
+                .context("Could not determine config directory")?;
+            println!("{}", settings::themes_dir(&config_dir).display());
         }
     }
     Ok(())
@@ -131,31 +133,21 @@ fn resolve_theme(
     Ok(default_for_variant(variant))
 }
 
-async fn run_tui(cli: Cli) -> Result<()> {
+async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
     let config_dir = settings::config_dir(cli.config_dir.as_ref());
-    let settings = config_dir
-        .as_ref()
-        .map(|dir| {
+    let (settings, storage) = match config_dir.as_ref() {
+        Some(dir) => {
             let path = settings::settings_path(dir);
-            Settings::load(&path).unwrap_or_else(|e| {
-                eprintln!("Warning: {}", e);
-                Settings::default()
-            })
-        })
-        .unwrap_or_default();
-    let storage = if let Some(ref dir) = config_dir {
-        match Storage::open(&settings::db_path(dir)).await {
-            Ok(s) => Some(s),
-            Err(e) => {
-                eprintln!("Storage disabled: {}", e);
-                None
-            }
+            let settings = Settings::load(&path)
+                .with_context(|| format!("Failed to load settings from {}", path.display()))?;
+            let storage = Storage::open(&settings::db_path(dir))
+                .await
+                .context("Failed to open storage database")?;
+            (settings, Some(storage))
         }
-    } else {
-        None
+        None => (Settings::default(), None),
     };
     let resolved_theme = resolve_theme(&cli, &settings, config_dir.as_ref())?;
-    let mut terminal = tui::init()?;
     let mut app = App::new(resolved_theme, config_dir, storage);
     let mut events = EventHandler::new(250);
     let mut last_height: Option<u16> = None;
@@ -191,7 +183,6 @@ async fn run_tui(cli: Cli) -> Result<()> {
         }
     }
 
-    tui::restore()?;
     Ok(())
 }
 
