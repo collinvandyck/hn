@@ -197,17 +197,46 @@ impl HnClient {
 }
 
 fn find_parent_id(comments: &[Comment], comment_id: u64) -> Option<u64> {
-    for c in comments {
-        if c.kids.contains(&comment_id) {
-            return Some(c.id);
-        }
-    }
-    None
+    comments
+        .iter()
+        .find(|c| c.kids.contains(&comment_id))
+        .map(|c| c.id)
 }
 
-/// Builds a DFS-ordered comment tree from fetched items.
+/// Core DFS tree builder - the single implementation for ordering comments.
 ///
-/// Filters kids that were attempted but not fetched (deleted/dead), while
+/// Takes items in a HashMap, traverses from root_kids in DFS order,
+/// and converts each item to a Comment using the provided closure.
+fn build_tree<T, K, F>(
+    mut items: HashMap<u64, T>,
+    root_kids: &[u64],
+    get_kids: K,
+    mut to_comment: F,
+) -> Vec<Comment>
+where
+    K: Fn(&T) -> &[u64],
+    F: FnMut(T, usize) -> Option<Comment>,
+{
+    let mut result = Vec::new();
+    let mut stack: Vec<(u64, usize)> = root_kids.iter().rev().map(|&id| (id, 0)).collect();
+
+    while let Some((id, depth)) = stack.pop() {
+        if let Some(item) = items.remove(&id) {
+            for &kid_id in get_kids(&item).iter().rev() {
+                stack.push((kid_id, depth + 1));
+            }
+            if let Some(comment) = to_comment(item, depth) {
+                result.push(comment);
+            }
+        }
+    }
+
+    result
+}
+
+/// Builds a DFS-ordered comment tree from fetched HnItems.
+///
+/// Pre-filters kids that were attempted but not fetched (deleted/dead), while
 /// keeping kids that were never attempted (beyond max_depth) so UI shows
 /// they have replies even if we can't display them.
 pub fn build_comment_tree(
@@ -215,42 +244,22 @@ pub fn build_comment_tree(
     attempted: &std::collections::HashSet<u64>,
     root_kids: &[u64],
 ) -> Vec<Comment> {
-    let mut comments = Vec::new();
-    let mut stack: Vec<(u64, usize)> = root_kids.iter().rev().map(|&id| (id, 0)).collect();
-
-    while let Some((id, depth)) = stack.pop() {
-        if let Some(mut item) = items.remove(&id) {
-            item.kids
-                .retain(|kid_id| !attempted.contains(kid_id) || items.contains_key(kid_id));
-
-            for &kid_id in item.kids.iter().rev() {
-                stack.push((kid_id, depth + 1));
-            }
-            if let Some(comment) = Comment::from_item(item, depth) {
-                comments.push(comment);
-            }
-        }
+    // Pre-filter kids: remove attempted-but-missing (deleted/dead)
+    // Build set of present IDs first to avoid borrow conflict
+    let present: std::collections::HashSet<u64> = items.keys().copied().collect();
+    for item in items.values_mut() {
+        item.kids
+            .retain(|kid_id| !attempted.contains(kid_id) || present.contains(kid_id));
     }
 
-    comments
+    build_tree(items, root_kids, |item| &item.kids, Comment::from_item)
 }
 
 /// Orders cached comments into DFS tree order using stored kids arrays.
 fn order_cached_comments(cached: Vec<Comment>, root_kids: &[u64]) -> Vec<Comment> {
-    let mut by_id: HashMap<u64, Comment> = cached.into_iter().map(|c| (c.id, c)).collect();
-    let mut result = Vec::with_capacity(by_id.len());
-    let mut stack: Vec<u64> = root_kids.iter().rev().copied().collect();
+    let by_id: HashMap<u64, Comment> = cached.into_iter().map(|c| (c.id, c)).collect();
 
-    while let Some(id) = stack.pop() {
-        if let Some(comment) = by_id.remove(&id) {
-            for &kid_id in comment.kids.iter().rev() {
-                stack.push(kid_id);
-            }
-            result.push(comment);
-        }
-    }
-
-    result
+    build_tree(by_id, root_kids, |c| &c.kids, |c, _depth| Some(c))
 }
 
 impl Default for HnClient {
@@ -383,5 +392,160 @@ mod tests {
 
         assert_eq!(comments.len(), 1);
         assert_eq!(comments[0].kids, vec![999]);
+    }
+
+    /// Verifies that fresh fetch and cached load produce identical tree ordering.
+    ///
+    /// This tests the full round-trip:
+    /// 1. Build tree from HnItems (fresh fetch path)
+    /// 2. Save to storage
+    /// 3. Load from storage and rebuild tree (cached path)
+    /// 4. Assert both produce identical results
+    #[tokio::test]
+    async fn test_cached_comments_match_fresh_tree_order() {
+        use crate::storage::{StorableStory, Storage, StorageLocation};
+
+        // Build a complex tree structure:
+        //   1 (root)
+        //   ├── 2
+        //   │   ├── 4
+        //   │   └── 5
+        //   └── 3
+        //       └── 6
+        //           └── 7
+        let mut items: HashMap<u64, HnItem> = HashMap::new();
+        items.insert(
+            1,
+            make_comment_item(1, "user1", "Root comment 1", vec![2, 3]),
+        );
+        items.insert(2, make_comment_item(2, "user2", "Child of 1", vec![4, 5]));
+        items.insert(3, make_comment_item(3, "user3", "Child of 1", vec![6]));
+        items.insert(4, make_comment_item(4, "user4", "Child of 2", vec![]));
+        items.insert(5, make_comment_item(5, "user5", "Child of 2", vec![]));
+        items.insert(6, make_comment_item(6, "user6", "Child of 3", vec![7]));
+        items.insert(7, make_comment_item(7, "user7", "Child of 6", vec![]));
+
+        let story_kids = vec![1];
+        let attempted: HashSet<u64> = items.keys().copied().collect();
+
+        // Fresh path: build tree from HnItems
+        let fresh_comments = build_comment_tree(items, &attempted, &story_kids);
+
+        // Save to storage (simulating cache write)
+        let storage = Storage::open(StorageLocation::InMemory).unwrap();
+        let story_id = 12345u64;
+
+        // Must save story first (foreign key constraint)
+        let story = StorableStory {
+            id: story_id,
+            title: "Test".to_string(),
+            url: None,
+            score: 1,
+            by: "user".to_string(),
+            time: 1700000000,
+            descendants: 7,
+            kids: story_kids.clone(),
+            fetched_at: 1700000000,
+        };
+        storage.save_story(&story).await.unwrap();
+
+        let storable: Vec<StorableComment> = fresh_comments
+            .iter()
+            .map(|c| {
+                StorableComment::from_comment(c, story_id, find_parent_id(&fresh_comments, c.id))
+            })
+            .collect();
+        storage.save_comments(story_id, &storable).await.unwrap();
+
+        // Cached path: load from storage and rebuild tree
+        let cached = storage.get_comments(story_id).await.unwrap();
+        let cached_as_comments: Vec<Comment> = cached.into_iter().map(|c| c.into()).collect();
+        let cached_comments = order_cached_comments(cached_as_comments, &story_kids);
+
+        // Both paths must produce identical results
+        assert_eq!(
+            fresh_comments.len(),
+            cached_comments.len(),
+            "Comment count mismatch"
+        );
+
+        for (i, (fresh, cached)) in fresh_comments
+            .iter()
+            .zip(cached_comments.iter())
+            .enumerate()
+        {
+            assert_eq!(fresh.id, cached.id, "ID mismatch at position {}", i);
+            assert_eq!(
+                fresh.depth, cached.depth,
+                "Depth mismatch at position {} (id={})",
+                i, fresh.id
+            );
+            assert_eq!(
+                fresh.kids, cached.kids,
+                "Kids mismatch at position {} (id={})",
+                i, fresh.id
+            );
+        }
+    }
+
+    /// Verifies tree ordering with multiple root comments.
+    #[tokio::test]
+    async fn test_cached_comments_multiple_roots() {
+        use crate::storage::{StorableStory, Storage, StorageLocation};
+
+        // Two separate root comment threads
+        //   10 (root 1)
+        //   └── 11
+        //   20 (root 2)
+        //   └── 21
+        //       └── 22
+        let mut items: HashMap<u64, HnItem> = HashMap::new();
+        items.insert(10, make_comment_item(10, "a", "Root 1", vec![11]));
+        items.insert(11, make_comment_item(11, "b", "Child of 10", vec![]));
+        items.insert(20, make_comment_item(20, "c", "Root 2", vec![21]));
+        items.insert(21, make_comment_item(21, "d", "Child of 20", vec![22]));
+        items.insert(22, make_comment_item(22, "e", "Child of 21", vec![]));
+
+        let story_kids = vec![10, 20];
+        let attempted: HashSet<u64> = items.keys().copied().collect();
+
+        let fresh_comments = build_comment_tree(items, &attempted, &story_kids);
+
+        let storage = Storage::open(StorageLocation::InMemory).unwrap();
+        let story_id = 99999u64;
+
+        // Must save story first (foreign key constraint)
+        let story = StorableStory {
+            id: story_id,
+            title: "Test".to_string(),
+            url: None,
+            score: 1,
+            by: "user".to_string(),
+            time: 1700000000,
+            descendants: 5,
+            kids: story_kids.clone(),
+            fetched_at: 1700000000,
+        };
+        storage.save_story(&story).await.unwrap();
+
+        let storable = fresh_comments
+            .iter()
+            .map(|c| {
+                StorableComment::from_comment(c, story_id, find_parent_id(&fresh_comments, c.id))
+            })
+            .collect::<Vec<_>>();
+        storage.save_comments(story_id, &storable).await.unwrap();
+
+        let cached = storage.get_comments(story_id).await.unwrap();
+        let cached_as_comments: Vec<Comment> = cached.into_iter().map(|c| c.into()).collect();
+        let cached_comments = order_cached_comments(cached_as_comments, &story_kids);
+
+        // Verify DFS order: 10, 11, 20, 21, 22
+        let expected_order = vec![10, 11, 20, 21, 22];
+        let fresh_order: Vec<u64> = fresh_comments.iter().map(|c| c.id).collect();
+        let cached_order: Vec<u64> = cached_comments.iter().map(|c| c.id).collect();
+
+        assert_eq!(fresh_order, expected_order, "Fresh order incorrect");
+        assert_eq!(cached_order, expected_order, "Cached order incorrect");
     }
 }
