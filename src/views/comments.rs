@@ -8,6 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 use textwrap;
+use unicode_width::UnicodeWidthStr;
 
 use crate::api::Comment;
 use crate::app::{App, View};
@@ -217,7 +218,7 @@ fn build_text_lines(
 ) -> Vec<Line<'static>> {
     let text = strip_html(text);
     let prefix = build_text_prefix(depth, has_more_at_depth, show_children_connector, color);
-    let prefix_width = prefix.content.len();
+    let prefix_width = prefix.content.width();
     let available_width = max_width.saturating_sub(prefix_width).max(20);
 
     wrap_text(&text, available_width)
@@ -500,6 +501,62 @@ mod tests {
         });
 
         assert!(output.contains("No comments yet"));
+    }
+
+    #[test]
+    fn test_comments_text_wrapping_consistent_when_expanded() {
+        // Regression test: text should wrap at the same width whether collapsed or expanded.
+        // The tree glyph (│) and spaces have the same display width, so wrapping shouldn't change.
+        let long_text = "This is a long comment that needs to wrap. It should wrap at exactly the same position whether the comment is collapsed or expanded because the tree glyphs and spaces have identical display widths.";
+        let comments = vec![
+            CommentBuilder::new()
+                .id(1)
+                .text(long_text)
+                .author("alice")
+                .depth(0)
+                .kids(vec![2])
+                .build(),
+            CommentBuilder::new()
+                .id(2)
+                .text("Child comment")
+                .author("bob")
+                .depth(1)
+                .build(),
+        ];
+
+        // Render collapsed
+        let collapsed_app = TestAppBuilder::new()
+            .with_comments(comments.clone())
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Wrap Test".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .build();
+
+        let collapsed_output = render_to_string(80, 16, |frame| {
+            render(frame, &collapsed_app, frame.area());
+        });
+
+        // Render expanded
+        let expanded_app = TestAppBuilder::new()
+            .with_comments(comments)
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Wrap Test".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .expanded(vec![1])
+            .build();
+
+        let expanded_output = render_to_string(80, 16, |frame| {
+            render(frame, &expanded_app, frame.area());
+        });
+
+        insta::assert_snapshot!("text_wrap_collapsed", collapsed_output);
+        insta::assert_snapshot!("text_wrap_expanded", expanded_output);
     }
 
     #[test]
