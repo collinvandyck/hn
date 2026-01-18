@@ -13,7 +13,6 @@ use tokio::sync::{mpsc, oneshot};
 pub use types::{CachedFeed, StorableComment, StorableStory};
 
 use crate::api::Feed;
-use crate::settings::Settings;
 
 const CACHE_TTL: Duration = Duration::from_secs(60);
 
@@ -26,7 +25,6 @@ pub enum StorageLocation {
 #[derive(Debug)]
 pub enum StorageError {
     Sqlite(rusqlite::Error),
-    SettingsValidation(String),
     Channel(String),
     Migration { version: i64, error: String },
     NoDbPathParent,
@@ -37,7 +35,6 @@ impl std::fmt::Display for StorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StorageError::Sqlite(e) => write!(f, "Database error: {}", e),
-            StorageError::SettingsValidation(msg) => write!(f, "Settings validation: {}", msg),
             StorageError::Channel(msg) => write!(f, "Channel error: {}", msg),
             StorageError::Migration { version, error } => {
                 write!(f, "Migration {} failed: {}", version, error)
@@ -71,10 +68,7 @@ impl From<oneshot::error::RecvError> for StorageError {
 impl StorageError {
     #[allow(dead_code)] // Used by future features
     pub fn is_fatal(&self) -> bool {
-        matches!(
-            self,
-            StorageError::SettingsValidation(_) | StorageError::Migration { .. }
-        )
+        matches!(self, StorageError::Migration { .. })
     }
 }
 
