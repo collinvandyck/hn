@@ -336,7 +336,7 @@ impl TestAppBuilder {
             load,
             should_quit: false,
             show_help: self.show_help,
-            client: HnClient::new(),
+            client: HnClient::new(None),
             scroll_offset: self.scroll_offset,
             theme: self.theme,
             clock: self.clock,

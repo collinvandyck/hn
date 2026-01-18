@@ -16,18 +16,14 @@ pub struct HnClient {
 }
 
 impl HnClient {
-    pub fn new() -> Self {
+    pub fn new(storage: Option<Storage>) -> Self {
         Self {
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
                 .build()
                 .expect("Failed to create HTTP client"),
-            storage: None,
+            storage,
         }
-    }
-
-    pub fn set_storage(&mut self, storage: Storage) {
-        self.storage = Some(storage);
     }
 
     async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T, ApiError> {
@@ -240,7 +236,7 @@ pub fn build_comment_tree(
 
 impl Default for HnClient {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
@@ -298,7 +294,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_creation() {
-        let client = HnClient::new();
+        let client = HnClient::new(None);
         // Just verify it doesn't panic
         drop(client);
     }

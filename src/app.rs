@@ -225,10 +225,7 @@ impl App {
         storage: Option<Storage>,
     ) -> Self {
         let (result_tx, result_rx) = mpsc::channel(10);
-        let mut client = HnClient::new();
-        if let Some(s) = storage {
-            client.set_storage(s);
-        }
+        let client = HnClient::new(storage);
         Self {
             view: View::default(),
             feed: Feed::default(),
