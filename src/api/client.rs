@@ -145,14 +145,10 @@ impl HnClient {
                 .filter_map(Story::from_item)
                 .collect();
 
-            // Write-through to storage (fire-and-forget)
+            // Write-through to storage
             if let Some(storage) = &self.storage {
                 for story in &fetched {
-                    let storage = storage.clone();
-                    let storable = StorableStory::from(story);
-                    tokio::spawn(async move {
-                        let _ = storage.save_story(&storable).await;
-                    });
+                    storage.save_story(&StorableStory::from(story)).await?;
                 }
             }
 
@@ -173,13 +169,15 @@ impl HnClient {
         &self,
         story: &Story,
         max_depth: usize,
+        force_refresh: bool,
     ) -> Result<Vec<Comment>, ApiError> {
         use std::collections::HashSet;
 
         info!("fetching comments");
 
-        // Check storage for cached comments
-        if let Some(storage) = &self.storage
+        // Check storage for cached comments (unless forcing refresh)
+        if !force_refresh
+            && let Some(storage) = &self.storage
             && let Ok(Some(cached)) = storage.get_fresh_comments(story.id).await
         {
             info!(count = cached.len(), "comments cache hit");
@@ -214,19 +212,15 @@ impl HnClient {
 
         let comments = build_comment_tree(items, &attempted, &story.kids);
 
-        // Write-through to storage (fire-and-forget)
+        // Write-through to storage
         if let Some(storage) = &self.storage {
-            let storage = storage.clone();
-            let story_id = story.id;
             let storable: Vec<StorableComment> = comments
                 .iter()
                 .map(|c| {
-                    StorableComment::from_comment(c, story_id, find_parent_id(&comments, c.id))
+                    StorableComment::from_comment(c, story.id, find_parent_id(&comments, c.id))
                 })
                 .collect();
-            tokio::spawn(async move {
-                let _ = storage.save_comments(story_id, &storable).await;
-            });
+            storage.save_comments(story.id, &storable).await?;
         }
 
         info!(count = comments.len(), "fetched comments");

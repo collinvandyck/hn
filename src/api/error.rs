@@ -9,6 +9,8 @@ pub enum ApiError {
     HttpStatus(u16, String),
     /// Failed to parse response
     Parse(String),
+    /// Storage/persistence failure
+    Storage(String),
 }
 
 impl ApiError {
@@ -29,7 +31,13 @@ impl ApiError {
             Self::HttpStatus(500..=599, _) => "Server error. Please try again later.".into(),
             Self::HttpStatus(code, msg) => format!("HTTP error {}: {}", code, msg),
             Self::Parse(details) => format!("Failed to parse response: {}", details),
+            Self::Storage(details) => format!("Storage error: {}", details),
         }
+    }
+
+    /// Returns true if this error should cause the program to exit.
+    pub fn is_fatal(&self) -> bool {
+        matches!(self, Self::Storage(_))
     }
 }
 
@@ -57,5 +65,11 @@ impl From<reqwest::Error> for ApiError {
         } else {
             Self::Network(err.to_string())
         }
+    }
+}
+
+impl From<crate::storage::StorageError> for ApiError {
+    fn from(err: crate::storage::StorageError) -> Self {
+        ApiError::Storage(err.to_string())
     }
 }

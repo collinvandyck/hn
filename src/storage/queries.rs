@@ -1,4 +1,4 @@
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, params, params_from_iter};
 
 use crate::api::Feed;
 
@@ -72,17 +72,20 @@ pub fn save_comments(
     story_id: u64,
     comments: &[StorableComment],
 ) -> Result<(), StorageError> {
-    // Delete existing comments for this story first
-    conn.execute(
-        "DELETE FROM comments WHERE story_id = ?1",
-        params![story_id as i64],
-    )?;
+    if comments.is_empty() {
+        conn.execute(
+            "DELETE FROM comments WHERE story_id = ?1",
+            params![story_id as i64],
+        )?;
+        return Ok(());
+    }
 
-    let mut stmt = conn.prepare(
-        "INSERT INTO comments (id, story_id, parent_id, text, by, time, depth, kids, fetched_at)
+    let tx = conn.unchecked_transaction()?;
+
+    let mut stmt = tx.prepare(
+        "INSERT OR REPLACE INTO comments (id, story_id, parent_id, text, by, time, depth, kids, fetched_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )?;
-
     for comment in comments {
         stmt.execute(params![
             comment.id as i64,
@@ -96,7 +99,20 @@ pub fn save_comments(
             comment.fetched_at as i64,
         ])?;
     }
+    drop(stmt);
 
+    let ids: Vec<i64> = comments.iter().map(|c| c.id as i64).collect();
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let delete_sql = format!(
+        "DELETE FROM comments WHERE story_id = ?1 AND id NOT IN ({})",
+        placeholders
+    );
+    tx.execute(
+        &delete_sql,
+        params_from_iter(std::iter::once(story_id as i64).chain(ids)),
+    )?;
+
+    tx.commit()?;
     Ok(())
 }
 
@@ -158,18 +174,28 @@ pub fn save_feed(conn: &Connection, feed: Feed, ids: &[u64]) -> Result<(), Stora
     let feed_type = feed_type_str(feed);
     let now = now_unix() as i64;
 
-    // Delete existing feed entries
-    conn.execute("DELETE FROM feeds WHERE feed_type = ?1", params![feed_type])?;
+    if ids.is_empty() {
+        conn.execute("DELETE FROM feeds WHERE feed_type = ?1", params![feed_type])?;
+        return Ok(());
+    }
 
-    let mut stmt = conn.prepare(
-        "INSERT INTO feeds (feed_type, story_id, position, fetched_at)
+    let tx = conn.unchecked_transaction()?;
+
+    let mut stmt = tx.prepare(
+        "INSERT OR REPLACE INTO feeds (feed_type, story_id, position, fetched_at)
          VALUES (?1, ?2, ?3, ?4)",
     )?;
-
     for (position, &story_id) in ids.iter().enumerate() {
         stmt.execute(params![feed_type, story_id as i64, position as i64, now])?;
     }
+    drop(stmt);
 
+    tx.execute(
+        "DELETE FROM feeds WHERE feed_type = ?1 AND position >= ?2",
+        params![feed_type, ids.len() as i64],
+    )?;
+
+    tx.commit()?;
     Ok(())
 }
 

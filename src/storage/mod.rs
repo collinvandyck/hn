@@ -370,4 +370,111 @@ mod tests {
         let loaded = storage.get_story(999999).await.unwrap();
         assert!(loaded.is_none());
     }
+
+    #[tokio::test]
+    async fn test_comments_upsert_updates_existing() {
+        let storage = Storage::open_in_memory().await.unwrap();
+        let story = StorableStory {
+            id: 123,
+            title: "Test".to_string(),
+            url: None,
+            score: 1,
+            by: "u".to_string(),
+            time: 1700000000,
+            descendants: 1,
+            kids: vec![1001],
+            fetched_at: now_unix(),
+        };
+        storage.save_story(&story).await.unwrap();
+
+        let v1 = vec![StorableComment {
+            id: 1001,
+            story_id: 123,
+            parent_id: None,
+            text: "Original".to_string(),
+            by: "user".to_string(),
+            time: 1700000000,
+            depth: 0,
+            kids: vec![],
+            fetched_at: now_unix(),
+        }];
+        storage.save_comments(123, &v1).await.unwrap();
+
+        let v2 = vec![StorableComment {
+            id: 1001,
+            story_id: 123,
+            parent_id: None,
+            text: "Updated".to_string(),
+            by: "user".to_string(),
+            time: 1700000000,
+            depth: 0,
+            kids: vec![],
+            fetched_at: now_unix(),
+        }];
+        storage.save_comments(123, &v2).await.unwrap();
+
+        let loaded = storage.get_comments(123).await.unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].text, "Updated");
+    }
+
+    #[tokio::test]
+    async fn test_comments_upsert_deletes_orphans() {
+        let storage = Storage::open_in_memory().await.unwrap();
+        let story = StorableStory {
+            id: 123,
+            title: "Test".to_string(),
+            url: None,
+            score: 1,
+            by: "u".to_string(),
+            time: 1700000000,
+            descendants: 2,
+            kids: vec![1001],
+            fetched_at: now_unix(),
+        };
+        storage.save_story(&story).await.unwrap();
+
+        let v1 = vec![
+            StorableComment {
+                id: 1001,
+                story_id: 123,
+                parent_id: None,
+                text: "First".to_string(),
+                by: "user".to_string(),
+                time: 1700000000,
+                depth: 0,
+                kids: vec![],
+                fetched_at: now_unix(),
+            },
+            StorableComment {
+                id: 1002,
+                story_id: 123,
+                parent_id: None,
+                text: "Second".to_string(),
+                by: "user".to_string(),
+                time: 1700000000,
+                depth: 0,
+                kids: vec![],
+                fetched_at: now_unix(),
+            },
+        ];
+        storage.save_comments(123, &v1).await.unwrap();
+
+        let v2 = vec![StorableComment {
+            id: 1001,
+            story_id: 123,
+            parent_id: None,
+            text: "First".to_string(),
+            by: "user".to_string(),
+            time: 1700000000,
+            depth: 0,
+            kids: vec![],
+            fetched_at: now_unix(),
+        }];
+        storage.save_comments(123, &v2).await.unwrap();
+
+        let loaded = storage.get_comments(123).await.unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, 1001);
+    }
 }

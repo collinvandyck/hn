@@ -284,6 +284,9 @@ impl App {
                     Err(e) => {
                         self.load.set_error(e.user_message());
                         self.load.set_loading(false);
+                        if e.is_fatal() {
+                            self.should_quit = true;
+                        }
                     }
                 }
             }
@@ -320,6 +323,9 @@ impl App {
                     Err(e) => {
                         self.load.set_error(e.user_message());
                         self.load.loading_more = false;
+                        if e.is_fatal() {
+                            self.should_quit = true;
+                        }
                     }
                 }
             }
@@ -350,6 +356,9 @@ impl App {
                     Err(e) => {
                         self.load.set_error(e.user_message());
                         self.load.set_loading(false);
+                        if e.is_fatal() {
+                            self.should_quit = true;
+                        }
                     }
                 }
             }
@@ -824,7 +833,7 @@ impl App {
             if clear_cache {
                 client.clear_cache().await;
             }
-            let result = client.fetch_comments_flat(&story, 5).await;
+            let result = client.fetch_comments_flat(&story, 5, clear_cache).await;
             let _ = tx
                 .send(AsyncResult::Comments {
                     story_id,
