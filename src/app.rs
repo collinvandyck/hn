@@ -526,11 +526,7 @@ impl App {
             View::Comments { story_index, .. } => self.stories.get(*story_index),
         };
         if let Some(story) = story {
-            let url = story
-                .url
-                .clone()
-                .unwrap_or_else(|| format!("https://news.ycombinator.com/item?id={}", story.id));
-            let _ = open::that(url);
+            let _ = open::that(story.content_url());
         }
     }
 
@@ -538,14 +534,12 @@ impl App {
         match &self.view {
             View::Stories => {
                 if let Some(story) = self.stories.get(self.selected_index) {
-                    let url = format!("https://news.ycombinator.com/item?id={}", story.id);
-                    let _ = open::that(url);
+                    let _ = open::that(story.hn_url());
                 }
             }
             View::Comments { .. } => {
                 if let Some(comment) = self.selected_comment() {
-                    let url = format!("https://news.ycombinator.com/item?id={}", comment.id);
-                    let _ = open::that(url);
+                    let _ = open::that(comment.hn_url());
                 }
             }
         }

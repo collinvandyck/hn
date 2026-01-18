@@ -41,9 +41,8 @@ impl HnClient {
         self.item_cache.write().await.clear();
     }
 
-    pub async fn fetch_feed_ids(&self, feed: Feed) -> Result<Vec<u64>, ApiError> {
-        let url = format!("{}/{}.json", API_BASE, feed.endpoint());
-        let response = self.http.get(&url).send().await?;
+    async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T, ApiError> {
+        let response = self.http.get(url).send().await?;
         let status = response.status();
         if !status.is_success() {
             return Err(ApiError::HttpStatus(
@@ -51,11 +50,15 @@ impl HnClient {
                 status.canonical_reason().unwrap_or("").into(),
             ));
         }
-        let ids: Vec<u64> = response
+        response
             .json()
             .await
-            .map_err(|e| ApiError::Parse(e.to_string()))?;
-        Ok(ids)
+            .map_err(|e| ApiError::Parse(e.to_string()))
+    }
+
+    pub async fn fetch_feed_ids(&self, feed: Feed) -> Result<Vec<u64>, ApiError> {
+        let url = format!("{}/{}.json", API_BASE, feed.endpoint());
+        self.get_json(&url).await
     }
 
     async fn fetch_item(&self, id: u64) -> Result<HnItem, ApiError> {
@@ -69,18 +72,7 @@ impl HnClient {
         }
 
         let url = format!("{}/item/{}.json", API_BASE, id);
-        let response = self.http.get(&url).send().await?;
-        let status = response.status();
-        if !status.is_success() {
-            return Err(ApiError::HttpStatus(
-                status.as_u16(),
-                status.canonical_reason().unwrap_or("").into(),
-            ));
-        }
-        let item: HnItem = response
-            .json()
-            .await
-            .map_err(|e| ApiError::Parse(e.to_string()))?;
+        let item: HnItem = self.get_json(&url).await?;
 
         {
             let mut cache = self.item_cache.write().await;

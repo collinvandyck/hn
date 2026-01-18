@@ -56,6 +56,16 @@ impl Story {
             })
             .unwrap_or("self")
     }
+
+    /// URL to the HN discussion page for this story.
+    pub fn hn_url(&self) -> String {
+        format!("https://news.ycombinator.com/item?id={}", self.id)
+    }
+
+    /// URL to the story content (article URL, or HN page for self-posts).
+    pub fn content_url(&self) -> String {
+        self.url.clone().unwrap_or_else(|| self.hn_url())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +93,11 @@ impl Comment {
             depth,
             kids: item.kids,
         })
+    }
+
+    /// URL to the HN permalink for this comment.
+    pub fn hn_url(&self) -> String {
+        format!("https://news.ycombinator.com/item?id={}", self.id)
     }
 }
 
