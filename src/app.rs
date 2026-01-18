@@ -216,6 +216,8 @@ pub struct App {
     pub theme_picker: Option<ThemePicker>,
     // Config directory for persisting settings
     pub config_dir: Option<PathBuf>,
+    // Use custom comment list widget with partial rendering
+    pub use_custom_list: bool,
 }
 
 impl App {
@@ -246,6 +248,7 @@ impl App {
             viewport_height: None,
             theme_picker: None,
             config_dir,
+            use_custom_list: true,
         }
     }
 

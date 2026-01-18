@@ -1,0 +1,19 @@
+---
+source: src/views/comments.rs
+expression: output
+---
+Standard List Test
+
+┌Comments (3)──────────────────────────────────────────────────────────────────┐
+│▶ [ ] user1 · 1d ago                                                          │
+│      Short comment                                                           │
+│                                                                              │
+│  [ ] user2 · 1d ago                                                          │
+│      Another short comment                                                   │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+ Comments  1/3 | l/h:expand  L/H:subtree  +/-:thread  Esc:back  ?:help

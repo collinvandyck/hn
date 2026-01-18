@@ -199,6 +199,7 @@ pub struct TestAppBuilder {
     clock: Arc<dyn Clock>,
     viewport_height: Option<u16>,
     config_dir: Option<PathBuf>,
+    use_custom_list: bool,
 }
 
 impl Default for TestAppBuilder {
@@ -229,6 +230,7 @@ impl TestAppBuilder {
             clock: fixed_clock(TEST_NOW),
             viewport_height: None,
             config_dir: None,
+            use_custom_list: true,
         }
     }
 
@@ -308,6 +310,11 @@ impl TestAppBuilder {
         self
     }
 
+    pub fn use_custom_list(mut self, use_custom: bool) -> Self {
+        self.use_custom_list = use_custom;
+        self
+    }
+
     pub fn build(self) -> App {
         let (result_tx, result_rx) = mpsc::channel(10);
 
@@ -348,6 +355,7 @@ impl TestAppBuilder {
             viewport_height: self.viewport_height,
             theme_picker: None,
             config_dir: self.config_dir,
+            use_custom_list: self.use_custom_list,
         }
     }
 }

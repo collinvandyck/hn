@@ -3,6 +3,9 @@ default: run
 run:
     cargo run
 
+rr:
+    cargo run --release
+
 run-theme theme:
     cargo run -- --theme {{theme}}
 

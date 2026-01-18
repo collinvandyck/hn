@@ -19,6 +19,7 @@ use crate::views::status_bar::StatusBar;
 use crate::views::tree::{
     build_empty_line_prefix, build_meta_tree_prefix, build_text_prefix, compute_tree_context,
 };
+use crate::widgets::{CommentList, CommentListItem, CommentListState};
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let story_title = match &app.view {
@@ -82,9 +83,60 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
+    if app.use_custom_list {
+        render_with_custom_list(frame, app, area);
+    } else {
+        render_with_standard_list(frame, app, area);
+    }
+}
+
+fn render_with_custom_list(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = &app.theme;
     let content_width = area.width.saturating_sub(4) as usize;
     let visible_indices = app.visible_comment_indices();
     let tree_context = compute_tree_context(app.comment_tree.comments(), &visible_indices);
+
+    let items: Vec<CommentListItem> = visible_indices
+        .iter()
+        .enumerate()
+        .map(|(vis_idx, &i)| {
+            let comment = app.comment_tree.get(i).unwrap();
+            let is_expanded = app.comment_tree.is_expanded(comment.id);
+            let has_more = &tree_context[vis_idx];
+            let lines = comment_to_lines(
+                comment,
+                content_width,
+                is_expanded,
+                theme,
+                has_more,
+                &app.clock,
+            );
+            CommentListItem::new(lines)
+        })
+        .collect();
+
+    let list = CommentList::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border))
+                .title(format!("Comments ({})", app.comment_tree.len())),
+        )
+        .highlight_style(Style::default().bg(theme.selection_bg))
+        .highlight_symbol("▶ ");
+
+    let mut state = CommentListState::new();
+    state.select(Some(app.selected_index));
+
+    frame.render_stateful_widget(list, area, &mut state);
+}
+
+fn render_with_standard_list(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = &app.theme;
+    let content_width = area.width.saturating_sub(4) as usize;
+    let visible_indices = app.visible_comment_indices();
+    let tree_context = compute_tree_context(app.comment_tree.comments(), &visible_indices);
+
     let items: Vec<ListItem> = visible_indices
         .iter()
         .enumerate()
@@ -134,6 +186,24 @@ fn comment_to_list_item(
     has_more_at_depth: &[bool],
     clock: &Arc<dyn Clock>,
 ) -> ListItem<'static> {
+    ListItem::new(comment_to_lines(
+        comment,
+        max_width,
+        is_expanded,
+        theme,
+        has_more_at_depth,
+        clock,
+    ))
+}
+
+fn comment_to_lines(
+    comment: &Comment,
+    max_width: usize,
+    is_expanded: bool,
+    theme: &ResolvedTheme,
+    has_more_at_depth: &[bool],
+    clock: &Arc<dyn Clock>,
+) -> Vec<Line<'static>> {
     let color = theme.depth_color(comment.depth);
     let has_children = !comment.kids.is_empty();
     let show_children_connector = has_children && is_expanded;
@@ -158,8 +228,7 @@ fn comment_to_list_item(
     let mut lines = vec![meta_line];
     lines.extend(text_lines);
     lines.push(Line::from(vec![separator]));
-
-    ListItem::new(lines)
+    lines
 }
 
 fn build_meta_line(
@@ -543,5 +612,91 @@ mod tests {
         });
 
         assert!(output.contains("connection refused"));
+    }
+
+    #[test]
+    fn test_custom_list_fills_viewport_with_partial_comments() {
+        let comments = vec![
+            CommentBuilder::new()
+                .id(1)
+                .text("Short comment")
+                .author("user1")
+                .depth(0)
+                .build(),
+            CommentBuilder::new()
+                .id(2)
+                .text("Another short comment")
+                .author("user2")
+                .depth(0)
+                .build(),
+            CommentBuilder::new()
+                .id(3)
+                .text("This is a much longer comment that will wrap to multiple lines and should be partially visible at the bottom of the viewport instead of being skipped entirely causing blank space")
+                .author("user3")
+                .depth(0)
+                .build(),
+        ];
+
+        let app = TestAppBuilder::new()
+            .with_comments(comments)
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Partial Render Test".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .use_custom_list(true)
+            .selected(0)
+            .build();
+
+        // Height chosen to cause partial rendering of last comment
+        let output = render_to_string(80, 15, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn test_standard_list_for_comparison() {
+        let comments = vec![
+            CommentBuilder::new()
+                .id(1)
+                .text("Short comment")
+                .author("user1")
+                .depth(0)
+                .build(),
+            CommentBuilder::new()
+                .id(2)
+                .text("Another short comment")
+                .author("user2")
+                .depth(0)
+                .build(),
+            CommentBuilder::new()
+                .id(3)
+                .text("This is a much longer comment that will wrap to multiple lines and should be partially visible at the bottom of the viewport instead of being skipped entirely causing blank space")
+                .author("user3")
+                .depth(0)
+                .build(),
+        ];
+
+        let app = TestAppBuilder::new()
+            .with_comments(comments)
+            .view(View::Comments {
+                story_id: 1,
+                story_title: "Standard List Test".to_string(),
+                story_index: 0,
+                story_scroll: 0,
+            })
+            .use_custom_list(false)
+            .selected(0)
+            .build();
+
+        // Same height as custom list test for comparison
+        let output = render_to_string(80, 15, |frame| {
+            render(frame, &app, frame.area());
+        });
+
+        insta::assert_snapshot!(output);
     }
 }

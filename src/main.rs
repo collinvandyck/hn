@@ -11,6 +11,7 @@ mod theme;
 mod time;
 mod tui;
 mod views;
+mod widgets;
 
 #[cfg(test)]
 mod test_utils;
