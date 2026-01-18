@@ -30,6 +30,7 @@ use theme::{
     ResolvedTheme, ThemeVariant, all_themes, by_name, default_for_variant, detect_terminal_theme,
     load_theme_file,
 };
+use tokio::time::interval;
 use tui::EventHandler;
 
 #[tokio::main]
@@ -160,7 +161,8 @@ async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
     };
     let resolved_theme = resolve_theme(&cli, &settings, config_dir.as_ref())?;
     let mut app = App::new(resolved_theme, config_dir, storage);
-    let mut events = EventHandler::with_tick_every(Duration::from_millis(10));
+    let mut events = EventHandler::new();
+    let mut tick = interval(Duration::from_millis(16));
     let mut last_height: Option<u16> = None;
 
     app.load_stories();
@@ -175,22 +177,27 @@ async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
             app.update(Message::UpdateViewportHeight(current_height));
         }
 
-        // Poll async results (non-blocking)
-        while let Ok(result) = app.result_rx.try_recv() {
-            app.handle_async_result(result);
-        }
-
         if app.should_quit {
             break;
         }
 
-        match events.next().await? {
-            Event::Key(key) => {
-                if let Some(msg) = keys::handle_key(key, &app) {
-                    app.update(msg);
+        tokio::select! {
+            event = events.next() => {
+                match event? {
+                    Event::Key(key) => {
+                        if let Some(msg) = keys::handle_key(key, &app) {
+                            app.update(msg);
+                        }
+                    }
+                    Event::Resize => {}
                 }
             }
-            Event::Tick | Event::Resize => {}
+            result = app.result_rx.recv() => {
+                if let Some(result) = result {
+                    app.handle_async_result(result);
+                }
+            }
+            _ = tick.tick() => {} // redraw for spinner animation
         }
     }
 
