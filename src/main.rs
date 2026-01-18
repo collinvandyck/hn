@@ -16,8 +16,6 @@ mod widgets;
 #[cfg(test)]
 mod test_utils;
 
-use std::path::{Path, PathBuf};
-
 use anyhow::{Context, Result};
 use app::{App, Message, View};
 use clap::Parser;
@@ -25,6 +23,8 @@ use cli::{Cli, Commands, OutputFormat, ThemeArgs, ThemeCommands};
 use event::Event;
 use ratatui::Frame;
 use settings::Settings;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 use storage::{Storage, StorageLocation};
 use theme::{
     ResolvedTheme, ThemeVariant, all_themes, by_name, default_for_variant, detect_terminal_theme,
@@ -160,7 +160,7 @@ async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
     };
     let resolved_theme = resolve_theme(&cli, &settings, config_dir.as_ref())?;
     let mut app = App::new(resolved_theme, config_dir, storage);
-    let mut events = EventHandler::new(250);
+    let mut events = EventHandler::with_tick_every(Duration::from_millis(10));
     let mut last_height: Option<u16> = None;
 
     app.load_stories();

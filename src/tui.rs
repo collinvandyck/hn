@@ -39,10 +39,10 @@ pub struct EventHandler {
 }
 
 impl EventHandler {
-    pub fn new(tick_rate_ms: u64) -> Self {
+    pub fn with_tick_every(every: Duration) -> Self {
         Self {
             event_stream: EventStream::new(),
-            tick_interval: interval(Duration::from_millis(tick_rate_ms)),
+            tick_interval: interval(every),
         }
     }
 
