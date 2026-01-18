@@ -85,6 +85,10 @@ pub fn db_path(config_dir: &Path) -> PathBuf {
     config_dir.join("data.db")
 }
 
+pub fn log_path(config_dir: &Path) -> PathBuf {
+    config_dir.join("hn.log")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

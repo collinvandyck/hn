@@ -356,7 +356,7 @@ pub fn sample_stories() -> Vec<Story> {
         StoryBuilder::new()
             .id(1)
             .title("Show HN: I built a terminal UI for Hacker News")
-            .url("https://github.com/user/lima-hn")
+            .url("https://github.com/user/hn")
             .score(142)
             .author("dang")
             .comments(47)

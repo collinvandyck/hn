@@ -1,3 +1,6 @@
+use std::io::{self, Stdout};
+use std::time::Duration;
+
 use anyhow::Result;
 use crossterm::{
     event::{Event as CrosstermEvent, EventStream},
@@ -6,15 +9,15 @@ use crossterm::{
 };
 use futures::StreamExt;
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::io::{self, Stdout};
-use std::time::Duration;
 use tokio::time::interval;
+use tracing::debug;
 
 use crate::event::Event;
 
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
 
 pub fn init() -> Result<Tui> {
+    debug!("entering alternate screen");
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -24,6 +27,7 @@ pub fn init() -> Result<Tui> {
 }
 
 pub fn restore() -> Result<()> {
+    debug!("leaving alternate screen");
     disable_raw_mode()?;
     execute!(io::stdout(), LeaveAlternateScreen)?;
     Ok(())

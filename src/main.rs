@@ -4,6 +4,7 @@ mod cli;
 mod comment_tree;
 mod event;
 mod keys;
+mod logging;
 mod settings;
 mod storage;
 mod theme;
@@ -17,12 +18,11 @@ mod test_utils;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use clap::Parser;
-use ratatui::Frame;
-
 use app::{App, Message, View};
+use clap::Parser;
 use cli::{Cli, Commands, OutputFormat, ThemeArgs, ThemeCommands};
 use event::Event;
+use ratatui::Frame;
 use settings::Settings;
 use storage::Storage;
 use theme::{
@@ -39,9 +39,20 @@ async fn main() -> Result<()> {
         return handle_theme_command(theme_args, cli.config_dir.as_ref());
     }
 
+    // Initialize logging before entering alt screen
+    let config_dir = settings::config_dir(cli.config_dir.as_ref());
+    let _guard = config_dir.as_ref().and_then(|dir| {
+        let log_path = settings::log_path(dir);
+        logging::init(&log_path, cli.verbose)
+    });
+
+    tracing::info!("starting");
+
     let terminal = tui::init()?;
     let result = run_tui(cli, terminal).await;
     tui::restore()?;
+
+    tracing::info!("exiting");
     result
 }
 

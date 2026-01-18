@@ -1,11 +1,7 @@
 [package]
-name = "lima-hn"
+name = "hn"
 version = "0.1.0"
 edition = "2024"
-
-[[bin]]
-name = "hn"
-path = "src/main.rs"
 
 [dependencies]
 ratatui = "0.29"
@@ -26,6 +22,9 @@ toml = "0.8"
 terminal-light = "1"
 dirs = "5"
 rusqlite = { version = "0.31", features = ["bundled"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
 
 [dev-dependencies]
 tokio-test = "0.4"

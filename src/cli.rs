@@ -21,6 +21,10 @@ pub struct Cli {
     #[arg(long, value_name = "DIR")]
     pub config_dir: Option<PathBuf>,
 
+    /// Enable verbose logging (prints log path, sets DEBUG level)
+    #[arg(short, long)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

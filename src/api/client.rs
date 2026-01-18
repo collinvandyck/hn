@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
 use tokio::sync::RwLock;
+use tracing::{debug, info, instrument, warn};
 
 use super::error::ApiError;
 use super::types::{Comment, Feed, HnItem, Story};
@@ -52,6 +54,7 @@ impl HnClient {
         let response = self.http.get(url).send().await?;
         let status = response.status();
         if !status.is_success() {
+            warn!(status = %status, url, "http error");
             return Err(ApiError::HttpStatus(
                 status.as_u16(),
                 status.canonical_reason().unwrap_or("").into(),
@@ -95,7 +98,9 @@ impl HnClient {
         Ok(item)
     }
 
+    #[instrument(skip(self), fields(feed = %feed.label(), page))]
     pub async fn fetch_stories(&self, feed: Feed, page: usize) -> Result<Vec<Story>, ApiError> {
+        info!("fetching stories");
         let ids = self.fetch_feed_ids(feed).await?;
         let start = page * PAGE_SIZE;
         let end = (start + PAGE_SIZE).min(ids.len());
@@ -105,7 +110,9 @@ impl HnClient {
         }
 
         let page_ids = &ids[start..end];
-        self.fetch_stories_by_ids(page_ids).await
+        let stories = self.fetch_stories_by_ids(page_ids).await?;
+        info!(count = stories.len(), "fetched stories");
+        Ok(stories)
     }
 
     pub async fn fetch_stories_by_ids(&self, ids: &[u64]) -> Result<Vec<Story>, ApiError> {
@@ -116,8 +123,10 @@ impl HnClient {
         if let Some(storage) = &self.storage {
             for &id in ids {
                 if let Ok(Some(cached)) = storage.get_fresh_story(id).await {
+                    debug!(story_id = id, "cache hit");
                     stories.push(cached.into());
                 } else {
+                    debug!(story_id = id, "cache miss");
                     to_fetch.push(id);
                 }
             }
@@ -159,6 +168,7 @@ impl HnClient {
     }
 
     /// Fetches comments using BFS for parallelism, then reorders to DFS for display
+    #[instrument(skip(self, story), fields(story_id = story.id, max_depth))]
     pub async fn fetch_comments_flat(
         &self,
         story: &Story,
@@ -166,10 +176,13 @@ impl HnClient {
     ) -> Result<Vec<Comment>, ApiError> {
         use std::collections::HashSet;
 
+        info!("fetching comments");
+
         // Check storage for cached comments
         if let Some(storage) = &self.storage
             && let Ok(Some(cached)) = storage.get_fresh_comments(story.id).await
         {
+            info!(count = cached.len(), "comments cache hit");
             return Ok(cached.into_iter().map(|c| c.into()).collect());
         }
 
@@ -216,6 +229,7 @@ impl HnClient {
             });
         }
 
+        info!(count = comments.len(), "fetched comments");
         Ok(comments)
     }
 }

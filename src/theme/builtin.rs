@@ -40,7 +40,7 @@ pub fn default_dark() -> Theme {
     Theme {
         name: "default-dark".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Default dark theme using terminal colors".to_string()),
             variant: ThemeVariant::Dark,
         },
@@ -80,7 +80,7 @@ pub fn default_light() -> Theme {
     Theme {
         name: "default-light".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Default light theme using terminal colors".to_string()),
             variant: ThemeVariant::Light,
         },
@@ -120,7 +120,7 @@ pub fn monokai() -> Theme {
     Theme {
         name: "monokai".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Classic Monokai dark theme".to_string()),
             variant: ThemeVariant::Dark,
         },
@@ -160,7 +160,7 @@ pub fn dracula() -> Theme {
     Theme {
         name: "dracula".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Dracula dark theme".to_string()),
             variant: ThemeVariant::Dark,
         },
@@ -200,7 +200,7 @@ pub fn nord() -> Theme {
     Theme {
         name: "nord".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Arctic, bluish color palette".to_string()),
             variant: ThemeVariant::Dark,
         },
@@ -240,7 +240,7 @@ pub fn gruvbox_dark() -> Theme {
     Theme {
         name: "gruvbox-dark".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Gruvbox dark theme".to_string()),
             variant: ThemeVariant::Dark,
         },
@@ -280,7 +280,7 @@ pub fn gruvbox_light() -> Theme {
     Theme {
         name: "gruvbox-light".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Gruvbox light theme".to_string()),
             variant: ThemeVariant::Light,
         },
@@ -320,7 +320,7 @@ pub fn solarized_dark() -> Theme {
     Theme {
         name: "solarized-dark".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Solarized dark theme".to_string()),
             variant: ThemeVariant::Dark,
         },
@@ -360,7 +360,7 @@ pub fn solarized_light() -> Theme {
     Theme {
         name: "solarized-light".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Solarized light theme".to_string()),
             variant: ThemeVariant::Light,
         },
@@ -400,7 +400,7 @@ pub fn catppuccin_mocha() -> Theme {
     Theme {
         name: "catppuccin-mocha".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Catppuccin Mocha (darkest variant)".to_string()),
             variant: ThemeVariant::Dark,
         },
@@ -440,7 +440,7 @@ pub fn catppuccin_latte() -> Theme {
     Theme {
         name: "catppuccin-latte".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Catppuccin Latte (light variant)".to_string()),
             variant: ThemeVariant::Light,
         },
@@ -480,7 +480,7 @@ pub fn tokyo_night() -> Theme {
     Theme {
         name: "tokyo-night".to_string(),
         meta: ThemeMeta {
-            author: Some("lima-hn".to_string()),
+            author: Some("hn".to_string()),
             description: Some("Tokyo Night dark theme".to_string()),
             variant: ThemeVariant::Dark,
         },
