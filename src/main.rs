@@ -4,6 +4,7 @@ mod cli;
 mod comment_tree;
 mod event;
 mod keys;
+mod settings;
 mod theme;
 mod time;
 mod tui;
@@ -12,7 +13,7 @@ mod views;
 #[cfg(test)]
 mod test_utils;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -21,6 +22,7 @@ use ratatui::Frame;
 use app::{App, Message, View};
 use cli::{Cli, Commands, OutputFormat, ThemeArgs, ThemeCommands};
 use event::Event;
+use settings::Settings;
 use theme::{
     ResolvedTheme, ThemeVariant, all_themes, by_name, default_for_variant, detect_terminal_theme,
     load_theme_file,
@@ -31,17 +33,17 @@ use tui::EventHandler;
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    if let Some(Commands::Theme(theme_args)) = cli.command {
-        return handle_theme_command(theme_args);
+    if let Some(Commands::Theme(theme_args)) = &cli.command {
+        return handle_theme_command(theme_args, cli.config_dir.as_ref());
     }
     run_tui(cli).await
 }
 
-fn handle_theme_command(args: ThemeArgs) -> Result<()> {
-    match args.command {
+fn handle_theme_command(args: &ThemeArgs, custom_config_dir: Option<&PathBuf>) -> Result<()> {
+    match &args.command {
         ThemeCommands::List { verbose } => {
             let themes = all_themes();
-            if verbose {
+            if *verbose {
                 for theme in themes {
                     println!(
                         "{:<20} {:?}  {}",
@@ -57,7 +59,7 @@ fn handle_theme_command(args: ThemeArgs) -> Result<()> {
             }
         }
         ThemeCommands::Show { name, format } => {
-            let theme = by_name(&name).with_context(|| format!("Theme '{}' not found", name))?;
+            let theme = by_name(name).with_context(|| format!("Theme '{}' not found", name))?;
 
             match format {
                 OutputFormat::Toml => {
@@ -73,8 +75,8 @@ fn handle_theme_command(args: ThemeArgs) -> Result<()> {
             }
         }
         ThemeCommands::Path => {
-            if let Some(path) = cli::custom_themes_dir() {
-                println!("{}", path.display());
+            if let Some(config_dir) = settings::config_dir(custom_config_dir) {
+                println!("{}", settings::themes_dir(&config_dir).display());
             } else {
                 eprintln!("Could not determine config directory");
             }
@@ -83,7 +85,11 @@ fn handle_theme_command(args: ThemeArgs) -> Result<()> {
     Ok(())
 }
 
-fn resolve_theme(cli: &Cli) -> Result<ResolvedTheme> {
+fn resolve_theme(
+    cli: &Cli,
+    settings: &Settings,
+    config_dir: Option<&PathBuf>,
+) -> Result<ResolvedTheme> {
     let variant = if cli.dark {
         ThemeVariant::Dark
     } else if cli.light {
@@ -92,7 +98,10 @@ fn resolve_theme(cli: &Cli) -> Result<ResolvedTheme> {
         detect_terminal_theme()
     };
 
-    if let Some(theme_arg) = &cli.theme {
+    // Priority: CLI --theme > settings file > default
+    let theme_name = cli.theme.as_ref().or(settings.theme.as_ref());
+
+    if let Some(theme_arg) = theme_name {
         let path = Path::new(theme_arg);
         if path.exists() && path.extension().map(|e| e == "toml").unwrap_or(false) {
             let theme = load_theme_file(path)?;
@@ -103,8 +112,8 @@ fn resolve_theme(cli: &Cli) -> Result<ResolvedTheme> {
             return Ok(theme.into());
         }
 
-        if let Some(custom_dir) = cli::custom_themes_dir() {
-            let custom_path = custom_dir.join(format!("{}.toml", theme_arg));
+        if let Some(config_dir) = config_dir {
+            let custom_path = settings::themes_dir(config_dir).join(format!("{}.toml", theme_arg));
             if custom_path.exists() {
                 let theme = load_theme_file(&custom_path)?;
                 return Ok(theme.into());
@@ -112,7 +121,7 @@ fn resolve_theme(cli: &Cli) -> Result<ResolvedTheme> {
         }
 
         anyhow::bail!(
-            "Theme '{}' not found. Use 'lima-hn theme list' to see available themes.",
+            "Theme '{}' not found. Use 'hn theme list' to see available themes.",
             theme_arg
         );
     }
@@ -121,9 +130,22 @@ fn resolve_theme(cli: &Cli) -> Result<ResolvedTheme> {
 }
 
 async fn run_tui(cli: Cli) -> Result<()> {
-    let resolved_theme = resolve_theme(&cli)?;
+    let config_dir = settings::config_dir(cli.config_dir.as_ref());
+
+    let settings = config_dir
+        .as_ref()
+        .map(|dir| {
+            let path = settings::settings_path(dir);
+            Settings::load(&path).unwrap_or_else(|e| {
+                eprintln!("Warning: {}", e);
+                Settings::default()
+            })
+        })
+        .unwrap_or_default();
+
+    let resolved_theme = resolve_theme(&cli, &settings, config_dir.as_ref())?;
     let mut terminal = tui::init()?;
-    let mut app = App::new(resolved_theme);
+    let mut app = App::new(resolved_theme, config_dir);
     let mut events = EventHandler::new(250);
     let mut last_height: Option<u16> = None;
 

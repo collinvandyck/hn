@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -6,6 +7,7 @@ use tokio::sync::mpsc;
 
 use crate::api::{ApiError, Comment, Feed, HnClient, Story};
 use crate::comment_tree::CommentTree;
+use crate::settings::{self, Settings};
 use crate::theme::{ResolvedTheme, Theme, all_themes};
 use crate::time::Clock;
 
@@ -211,10 +213,12 @@ pub struct App {
     pub viewport_height: Option<u16>,
     // Theme picker popup
     pub theme_picker: Option<ThemePicker>,
+    // Config directory for persisting settings
+    pub config_dir: Option<PathBuf>,
 }
 
 impl App {
-    pub fn new(theme: ResolvedTheme) -> Self {
+    pub fn new(theme: ResolvedTheme, config_dir: Option<PathBuf>) -> Self {
         let (result_tx, result_rx) = mpsc::channel(10);
         Self {
             view: View::default(),
@@ -235,6 +239,7 @@ impl App {
             debug: DebugState::new(),
             viewport_height: None,
             theme_picker: None,
+            config_dir,
         }
     }
 
@@ -420,6 +425,29 @@ impl App {
     }
 
     fn confirm_theme_picker(&mut self) {
+        if let Some(config_dir) = &self.config_dir {
+            let path = settings::settings_path(config_dir);
+            match Settings::load(&path) {
+                Ok(mut current_settings) => {
+                    current_settings.theme = Some(self.theme.name.clone());
+                    if let Err(e) = current_settings.save(&path) {
+                        self.debug.log(format!("Failed to save settings: {}", e));
+                    }
+                }
+                Err(e) if path.exists() => {
+                    self.debug.log(format!("Won't save: {}", e));
+                }
+                Err(_) => {
+                    let settings = Settings {
+                        theme: Some(self.theme.name.clone()),
+                        ..Default::default()
+                    };
+                    if let Err(e) = settings.save(&path) {
+                        self.debug.log(format!("Failed to save settings: {}", e));
+                    }
+                }
+            }
+        }
         self.theme_picker = None;
     }
 
@@ -806,7 +834,7 @@ mod tests {
     use crate::theme::{ThemeVariant, default_for_variant};
 
     fn test_app() -> App {
-        App::new(default_for_variant(ThemeVariant::Dark))
+        App::new(default_for_variant(ThemeVariant::Dark), None)
     }
 
     #[test]

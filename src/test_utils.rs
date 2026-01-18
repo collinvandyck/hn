@@ -1,5 +1,6 @@
 //! Test data builders for view testing.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -196,6 +197,7 @@ pub struct TestAppBuilder {
     theme: ResolvedTheme,
     clock: Arc<dyn Clock>,
     viewport_height: Option<u16>,
+    config_dir: Option<PathBuf>,
 }
 
 impl Default for TestAppBuilder {
@@ -225,7 +227,13 @@ impl TestAppBuilder {
             theme: default_for_variant(ThemeVariant::Dark),
             clock: fixed_clock(TEST_NOW),
             viewport_height: None,
+            config_dir: None,
         }
+    }
+
+    pub fn config_dir(mut self, path: PathBuf) -> Self {
+        self.config_dir = Some(path);
+        self
     }
 
     pub fn view(mut self, view: View) -> Self {
@@ -338,6 +346,7 @@ impl TestAppBuilder {
             debug: DebugState::new(),
             viewport_height: self.viewport_height,
             theme_picker: None,
+            config_dir: self.config_dir,
         }
     }
 }

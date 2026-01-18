@@ -2,7 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = "lima-hn")]
+#[command(name = "hn")]
 #[command(about = "A terminal UI for Hacker News", long_about = None)]
 pub struct Cli {
     /// Theme name or path to a TOML theme file
@@ -16,6 +16,10 @@ pub struct Cli {
     /// Force light mode (overrides auto-detection)
     #[arg(long, conflicts_with = "dark")]
     pub light: bool,
+
+    /// Custom config directory (default: ~/.config/hn)
+    #[arg(long, value_name = "DIR")]
+    pub config_dir: Option<PathBuf>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -71,8 +75,4 @@ impl std::str::FromStr for OutputFormat {
             _ => Err(format!("Invalid format: {}. Use 'toml' or 'json'", s)),
         }
     }
-}
-
-pub fn custom_themes_dir() -> Option<PathBuf> {
-    dirs::config_dir().map(|p| p.join("lima-hn").join("themes"))
 }
