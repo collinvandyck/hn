@@ -31,7 +31,7 @@ build:
     cargo build --release
 
 install:
-    cargo install --path .
+    cargo install --path . --force
 
 clean:
     cargo clean
@@ -44,5 +44,5 @@ themes:
 theme-show name:
     cargo run -- theme show {{name}}
 
-cl:
-    lima claude --allow-dangerously-skip-permissions --dangerously-skip-permissions --continue
+cl *args:
+    lima claude --allow-dangerously-skip-permissions --dangerously-skip-permissions {{args}}
