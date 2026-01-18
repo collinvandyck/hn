@@ -31,7 +31,7 @@ use theme::{
     load_theme_file,
 };
 use tokio::time::interval;
-use tui::EventHandler;
+use tui::CrosstermEvents;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -161,7 +161,7 @@ async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
     };
     let resolved_theme = resolve_theme(&cli, &settings, config_dir.as_ref())?;
     let mut app = App::new(resolved_theme, config_dir, storage);
-    let mut events = EventHandler::new();
+    let mut events = CrosstermEvents::new();
     let mut tick = interval(Duration::from_millis(16));
     let mut last_height: Option<u16> = None;
 

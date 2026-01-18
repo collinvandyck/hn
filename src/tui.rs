@@ -31,11 +31,11 @@ pub fn restore() -> Result<()> {
     Ok(())
 }
 
-pub struct EventHandler {
+pub struct CrosstermEvents {
     event_stream: EventStream,
 }
 
-impl EventHandler {
+impl CrosstermEvents {
     pub fn new() -> Self {
         Self {
             event_stream: EventStream::new(),
