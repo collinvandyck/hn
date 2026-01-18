@@ -18,6 +18,7 @@ pub struct StatusBar<'a> {
     loading_text: Option<&'a str>,
     position: Option<(usize, usize)>,
     help_text: &'a str,
+    flash_text: Option<&'a str>,
 }
 
 impl<'a> StatusBar<'a> {
@@ -28,6 +29,7 @@ impl<'a> StatusBar<'a> {
             loading_text: None,
             position: None,
             help_text: "",
+            flash_text: None,
         }
     }
 
@@ -48,6 +50,11 @@ impl<'a> StatusBar<'a> {
 
     pub fn help(mut self, text: &'a str) -> Self {
         self.help_text = text;
+        self
+    }
+
+    pub fn flash(mut self, text: Option<&'a str>) -> Self {
+        self.flash_text = text;
         self
     }
 
@@ -78,10 +85,17 @@ impl<'a> StatusBar<'a> {
             spans.push(Span::raw(" | "));
         }
 
-        spans.push(Span::styled(
-            self.help_text.to_string(),
-            Style::default().fg(self.theme.foreground_dim),
-        ));
+        if let Some(flash) = self.flash_text {
+            spans.push(Span::styled(
+                flash.to_string(),
+                Style::default().fg(self.theme.foreground),
+            ));
+        } else {
+            spans.push(Span::styled(
+                self.help_text.to_string(),
+                Style::default().fg(self.theme.foreground_dim),
+            ));
+        }
 
         let status = Line::from(spans);
         frame.render_widget(Paragraph::new(status), area);

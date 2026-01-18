@@ -348,6 +348,7 @@ impl TestAppBuilder {
             viewport_height: self.viewport_height,
             theme_picker: None,
             config_dir: self.config_dir,
+            flash_message: None,
         }
     }
 }

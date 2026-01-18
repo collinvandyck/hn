@@ -247,7 +247,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     use super::spinner::spinner_frame;
 
     let help_text = if app.show_help {
-        "j/k:nav  l/h:expand  L/H:subtree  +/-:thread  o:story  c:link  Esc:back  r:refresh  t:themes  `:debug  q:quit  ?:hide"
+        "j/k:nav  l/h:expand  L/H:subtree  +/-:thread  o:link  O:story  y:copy  Y:copy story  Esc:back  r:refresh  t:themes  `:debug  q:quit  ?:hide"
     } else {
         "l/h:expand  L/H:subtree  +/-:thread  Esc:back  ?:help"
     };
@@ -264,7 +264,8 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let mut status_bar = StatusBar::new(&app.theme)
         .label("Comments")
         .position(app.selected_index + 1, app.comment_tree.len())
-        .help(help_text);
+        .help(help_text)
+        .flash(app.flash_text());
 
     if let Some(ref text) = loading_text {
         status_bar = status_bar.loading(text);

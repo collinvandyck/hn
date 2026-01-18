@@ -197,7 +197,7 @@ async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
                     app.handle_async_result(result);
                 }
             }
-            _ = tick.tick() => {} // redraw for spinner animation
+            _ = tick.tick() => {}
         }
     }
 

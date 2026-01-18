@@ -85,7 +85,7 @@ fn navigation_keymap() -> Keymap {
         .bind_ctrl(KeyCode::Char('d'), Message::PageDown)
         .bind_ctrl(KeyCode::Char('u'), Message::PageUp)
         .bind(KeyCode::Char('o'), Message::OpenUrl)
-        .bind(KeyCode::Char('c'), Message::OpenCommentsUrl)
+        .bind(KeyCode::Char('y'), Message::CopyUrl)
         .bind(KeyCode::Char('r'), Message::Refresh)
         .bind(KeyCode::Char('R'), Message::Refresh)
         .bind(KeyCode::Char('?'), Message::ToggleHelp)
@@ -117,6 +117,8 @@ fn comments_keymap() -> Keymap {
         .bind(KeyCode::Char('='), Message::ExpandThread)
         .bind(KeyCode::Char('-'), Message::CollapseThread)
         .bind(KeyCode::Char('_'), Message::CollapseThread)
+        .bind(KeyCode::Char('O'), Message::OpenStoryUrl)
+        .bind(KeyCode::Char('Y'), Message::CopyStoryUrl)
         .bind(KeyCode::Esc, Message::Back)
 }
 
@@ -347,5 +349,34 @@ mod tests {
     fn test_unknown_key_returns_none() {
         let app = test_app();
         assert!(handle_key(make_key(KeyCode::F(12)), &app).is_none());
+    }
+
+    #[test]
+    fn test_copy_keys() {
+        let stories_app = test_app();
+        let comments_app = comments_app();
+        // y copies URL in both views
+        assert!(matches!(
+            handle_key(make_key(KeyCode::Char('y')), &stories_app),
+            Some(Message::CopyUrl)
+        ));
+        assert!(matches!(
+            handle_key(make_key(KeyCode::Char('y')), &comments_app),
+            Some(Message::CopyUrl)
+        ));
+        // Y copies story URL (only in comments)
+        assert!(matches!(
+            handle_key(make_key(KeyCode::Char('Y')), &comments_app),
+            Some(Message::CopyStoryUrl)
+        ));
+    }
+
+    #[test]
+    fn test_open_story_url_in_comments() {
+        let app = comments_app();
+        assert!(matches!(
+            handle_key(make_key(KeyCode::Char('O')), &app),
+            Some(Message::OpenStoryUrl)
+        ));
     }
 }

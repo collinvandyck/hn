@@ -142,7 +142,7 @@ fn story_to_list_item(
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let help_text = if app.show_help {
-        "j/k:nav  g/G:top/bottom  H/L:feeds  o:open  l:comments  c:HN  1-6:feeds  r:refresh  t:themes  `:debug  q:quit  ?:hide"
+        "j/k:nav  g/G:top/bottom  H/L:feeds  o:open  y:copy  l:comments  1-6:feeds  r:refresh  t:themes  `:debug  q:quit  ?:hide"
     } else {
         "H/L:feeds  ?:help  q:quit"
     };
@@ -151,6 +151,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         .label(app.feed.label())
         .position(app.selected_index + 1, app.stories.len())
         .help(help_text)
+        .flash(app.flash_text())
         .render(frame, area);
 }
 

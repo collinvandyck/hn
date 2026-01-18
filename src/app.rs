@@ -166,8 +166,8 @@ pub enum Message {
     PageDown,
     PageUp,
     OpenUrl,
+    OpenStoryUrl,
     OpenComments,
-    OpenCommentsUrl,
     ExpandComment,
     CollapseComment,
     ExpandSubtree,
@@ -189,6 +189,9 @@ pub enum Message {
     ConfirmThemePicker,
     ThemePickerUp,
     ThemePickerDown,
+    // Clipboard
+    CopyUrl,
+    CopyStoryUrl,
 }
 
 pub struct App {
@@ -216,6 +219,8 @@ pub struct App {
     pub theme_picker: Option<ThemePicker>,
     // Config directory for persisting settings
     pub config_dir: Option<PathBuf>,
+    // Flash message for clipboard feedback
+    pub flash_message: Option<(String, Instant)>,
 }
 
 impl App {
@@ -246,6 +251,7 @@ impl App {
             viewport_height: None,
             theme_picker: None,
             config_dir,
+            flash_message: None,
         }
     }
 
@@ -388,8 +394,8 @@ impl App {
             }
             Message::PageUp => self.page_up(),
             Message::OpenUrl => self.open_url(),
+            Message::OpenStoryUrl => self.open_story_url(),
             Message::OpenComments => self.open_comments(),
-            Message::OpenCommentsUrl => self.open_comments_url(),
             Message::ExpandComment => self.expand_comment(),
             Message::CollapseComment => self.collapse_comment(),
             Message::ExpandSubtree => self.expand_subtree(),
@@ -416,6 +422,8 @@ impl App {
             Message::ConfirmThemePicker => self.confirm_theme_picker(),
             Message::ThemePickerUp => self.theme_picker_up(),
             Message::ThemePickerDown => self.theme_picker_down(),
+            Message::CopyUrl => self.copy_url(),
+            Message::CopyStoryUrl => self.copy_story_url(),
         }
     }
 
@@ -627,6 +635,21 @@ impl App {
     }
 
     fn open_url(&self) {
+        match &self.view {
+            View::Stories => {
+                if let Some(story) = self.stories.get(self.selected_index) {
+                    let _ = open::that(story.content_url());
+                }
+            }
+            View::Comments { .. } => {
+                if let Some(comment) = self.selected_comment() {
+                    let _ = open::that(comment.hn_url());
+                }
+            }
+        }
+    }
+
+    fn open_story_url(&self) {
         let story = match &self.view {
             View::Stories => self.stories.get(self.selected_index),
             View::Comments { story_index, .. } => self.stories.get(*story_index),
@@ -636,19 +659,46 @@ impl App {
         }
     }
 
-    fn open_comments_url(&self) {
+    fn copy_url(&mut self) {
         match &self.view {
             View::Stories => {
                 if let Some(story) = self.stories.get(self.selected_index) {
-                    let _ = open::that(story.hn_url());
+                    self.copy_to_clipboard(&story.content_url(), "url");
                 }
             }
             View::Comments { .. } => {
                 if let Some(comment) = self.selected_comment() {
-                    let _ = open::that(comment.hn_url());
+                    self.copy_to_clipboard(&comment.hn_url(), "link");
                 }
             }
         }
+    }
+
+    fn copy_story_url(&mut self) {
+        let story = match &self.view {
+            View::Stories => self.stories.get(self.selected_index),
+            View::Comments { story_index, .. } => self.stories.get(*story_index),
+        };
+        if let Some(story) = story {
+            self.copy_to_clipboard(&story.content_url(), "url");
+        }
+    }
+
+    fn copy_to_clipboard(&mut self, text: &str, label: &str) {
+        match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
+            Ok(()) => self.flash(&format!("copied {}", label)),
+            Err(_) => self.flash("clipboard unavailable"),
+        }
+    }
+
+    pub fn flash(&mut self, message: &str) {
+        self.flash_message = Some((message.to_string(), Instant::now()));
+    }
+
+    pub fn flash_text(&self) -> Option<&str> {
+        self.flash_message.as_ref().and_then(|(msg, time)| {
+            (time.elapsed() < std::time::Duration::from_secs(2)).then_some(msg.as_str())
+        })
     }
 
     fn open_comments(&mut self) {
