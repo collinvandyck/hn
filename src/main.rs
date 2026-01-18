@@ -187,4 +187,9 @@ fn render(app: &App, frame: &mut Frame) {
     if let Some(debug_area) = debug_area {
         views::debug::render(frame, app, debug_area);
     }
+
+    // Render theme picker overlay if open
+    if app.theme_picker.is_some() {
+        views::theme_picker::render(frame, app, area);
+    }
 }

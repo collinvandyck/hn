@@ -1,0 +1,24 @@
+---
+source: src/views/theme_picker.rs
+expression: output
+---
+
+
+
+
+                    ┌Theme─────────────────────────────────┐
+                    │  default-dark                        │
+                    │  default-light                       │
+                    │▶ monokai                             │
+                    │  dracula                             │
+                    │  nord                                │
+                    │  gruvbox-dark                        │
+                    │  gruvbox-light                       │
+                    │  solarized-dark                      │
+                    │  solarized-light                     │
+                    │  catppuccin-mocha                    │
+                    │  catppuccin-latte                    │
+                    │  tokyo-night                         │
+                    │                                      │
+                    └──────────────────────────────────────┘
+                    j/k:select  Enter:confirm  Esc:cancel

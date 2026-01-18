@@ -58,6 +58,19 @@ fn global_keymap() -> Keymap {
         .bind(KeyCode::Char('q'), Message::Quit)
         .bind_ctrl(KeyCode::Char('c'), Message::Quit)
         .bind(KeyCode::Char('`'), Message::ToggleDebug)
+        .bind(KeyCode::Char('t'), Message::OpenThemePicker)
+}
+
+/// Keybindings for the theme picker popup.
+fn theme_picker_keymap() -> Keymap {
+    Keymap::new()
+        .bind(KeyCode::Char('j'), Message::ThemePickerDown)
+        .bind(KeyCode::Down, Message::ThemePickerDown)
+        .bind(KeyCode::Char('k'), Message::ThemePickerUp)
+        .bind(KeyCode::Up, Message::ThemePickerUp)
+        .bind(KeyCode::Enter, Message::ConfirmThemePicker)
+        .bind(KeyCode::Esc, Message::CloseThemePicker)
+        .bind(KeyCode::Char('q'), Message::CloseThemePicker)
 }
 
 /// Navigation keybindings shared between stories and comments views.
@@ -108,6 +121,11 @@ fn comments_keymap() -> Keymap {
 }
 
 pub fn handle_key(key: KeyEvent, app: &App) -> Option<Message> {
+    // Theme picker takes priority when open
+    if app.theme_picker.is_some() {
+        return theme_picker_keymap().get(&key);
+    }
+
     // Global keys first
     if let Some(msg) = global_keymap().get(&key) {
         return Some(msg);

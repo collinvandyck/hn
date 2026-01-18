@@ -5,6 +5,7 @@ pub mod html;
 pub mod spinner;
 pub mod status_bar;
 pub mod stories;
+pub mod theme_picker;
 pub mod tree;
 
 #[cfg(test)]

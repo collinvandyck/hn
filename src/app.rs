@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::api::{ApiError, Comment, Feed, HnClient, Story};
 use crate::comment_tree::CommentTree;
-use crate::theme::ResolvedTheme;
+use crate::theme::{ResolvedTheme, Theme, all_themes};
 use crate::time::Clock;
 
 pub enum AsyncResult {
@@ -147,6 +147,13 @@ pub enum View {
     },
 }
 
+/// State for the theme picker popup.
+pub struct ThemePicker {
+    pub themes: Vec<Theme>,
+    pub selected: usize,
+    pub original: ResolvedTheme,
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     SelectNext,
@@ -173,6 +180,12 @@ pub enum Message {
     NextFeed,
     PrevFeed,
     UpdateViewportHeight(u16),
+    // Theme picker
+    OpenThemePicker,
+    CloseThemePicker,
+    ConfirmThemePicker,
+    ThemePickerUp,
+    ThemePickerDown,
 }
 
 pub struct App {
@@ -196,6 +209,8 @@ pub struct App {
     pub debug: DebugState,
     // Viewport tracking for dynamic story loading
     pub viewport_height: Option<u16>,
+    // Theme picker popup
+    pub theme_picker: Option<ThemePicker>,
 }
 
 impl App {
@@ -219,6 +234,7 @@ impl App {
             generation: 0,
             debug: DebugState::new(),
             viewport_height: None,
+            theme_picker: None,
         }
     }
 
@@ -375,6 +391,53 @@ impl App {
                     self.load_more();
                 }
             }
+            Message::OpenThemePicker => self.open_theme_picker(),
+            Message::CloseThemePicker => self.close_theme_picker(),
+            Message::ConfirmThemePicker => self.confirm_theme_picker(),
+            Message::ThemePickerUp => self.theme_picker_up(),
+            Message::ThemePickerDown => self.theme_picker_down(),
+        }
+    }
+
+    fn open_theme_picker(&mut self) {
+        let themes = all_themes();
+        let current_name = &self.theme.name;
+        let selected = themes
+            .iter()
+            .position(|t| &t.name == current_name)
+            .unwrap_or(0);
+        self.theme_picker = Some(ThemePicker {
+            themes,
+            selected,
+            original: self.theme.clone(),
+        });
+    }
+
+    fn close_theme_picker(&mut self) {
+        if let Some(picker) = self.theme_picker.take() {
+            self.theme = picker.original;
+        }
+    }
+
+    fn confirm_theme_picker(&mut self) {
+        self.theme_picker = None;
+    }
+
+    fn theme_picker_up(&mut self) {
+        if let Some(picker) = &mut self.theme_picker
+            && picker.selected > 0
+        {
+            picker.selected -= 1;
+            self.theme = picker.themes[picker.selected].clone().into();
+        }
+    }
+
+    fn theme_picker_down(&mut self) {
+        if let Some(picker) = &mut self.theme_picker
+            && picker.selected < picker.themes.len() - 1
+        {
+            picker.selected += 1;
+            self.theme = picker.themes[picker.selected].clone().into();
         }
     }
 

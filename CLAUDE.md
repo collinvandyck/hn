@@ -110,6 +110,8 @@ User-facing prose (README, help text, CLI output) should be lowercase and wry. U
 
 **Modular code:** Keep functions focused and composable. Prefer small, single-purpose modules over large files.
 
+**Bounds checks:** Prefer `idx < len - 1` over `idx + 1 < len` for clarity.
+
 **Tests:** High signal-to-noise ratio. Use builders and helpers (`TestAppBuilder`, `sample_stories()`) to hide setup boilerplate. Test names should describe the behavior being verified. The test body should make the "what" immediately clear. Modifications and new features should have high quality test coverage.
 
 **Comments:** Only where they add real value. No comments that merely restate what the code does. Good comments explain *why* something non-obvious exists, document tricky edge cases, or clarify intent that isn't obvious from the code itself. If code needs a comment to be understood, first consider if the code can be made clearer.

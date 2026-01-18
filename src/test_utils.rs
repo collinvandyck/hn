@@ -337,6 +337,7 @@ impl TestAppBuilder {
             generation: 0,
             debug: DebugState::new(),
             viewport_height: self.viewport_height,
+            theme_picker: None,
         }
     }
 }
