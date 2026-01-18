@@ -2,7 +2,11 @@
 
 a terminal ui for hacker news.
 
-i wanted something that felt like reading hn but without leaving the terminal. this is that. it works well enough that i use it daily, which is about all i can promise.
+i wanted something that felt like reading hn but without leaving the terminal.
+this started as an experiment with running claude in a lima vm. it ended up being
+pretty ergonomic, so i put it into `--dangerously-skip-permissions` mode and spent
+a couple of evenings steering it around. liking it so far. it's fun adding features
+to something that you personally want.
 
 ```
 cargo install --path .
