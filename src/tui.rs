@@ -9,7 +9,7 @@ use crossterm::{
 };
 use futures::StreamExt;
 use ratatui::{Terminal, backend::CrosstermBackend};
-use tokio::time::interval;
+use tokio::time::{Interval, interval};
 use tracing::debug;
 
 use crate::event::Event;
@@ -35,23 +35,21 @@ pub fn restore() -> Result<()> {
 
 pub struct EventHandler {
     event_stream: EventStream,
-    tick_rate: Duration,
+    tick_interval: Interval,
 }
 
 impl EventHandler {
     pub fn new(tick_rate_ms: u64) -> Self {
         Self {
             event_stream: EventStream::new(),
-            tick_rate: Duration::from_millis(tick_rate_ms),
+            tick_interval: interval(Duration::from_millis(tick_rate_ms)),
         }
     }
 
     pub async fn next(&mut self) -> Result<Event> {
-        let mut tick_interval = interval(self.tick_rate);
-
         loop {
             tokio::select! {
-                _ = tick_interval.tick() => {
+                _ = self.tick_interval.tick() => {
                     return Ok(Event::Tick);
                 }
                 event = self.event_stream.next() => {
