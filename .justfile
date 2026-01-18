@@ -1,4 +1,4 @@
-default: rr
+default: run
 
 run:
     cargo run

@@ -30,6 +30,25 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
 
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3
+
+[profile.release]
+debug = true
+strip = false
+
+[profile.profiling]
+inherits = "release"
+debug = 2
+strip = false
+lto = false
+
 [dev-dependencies]
 tokio-test = "0.4"
 insta = "1.40"
