@@ -16,7 +16,7 @@ mod widgets;
 #[cfg(test)]
 mod test_utils;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use app::{App, Message, View};
 use clap::Parser;
 use cli::{Cli, Commands, OutputFormat, ThemeArgs, ThemeCommands};
@@ -201,6 +201,9 @@ async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
         }
     }
 
+    if let Some(err) = app.load.error.as_ref() {
+        bail!("{err}")
+    }
     Ok(())
 }
 
