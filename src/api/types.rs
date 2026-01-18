@@ -19,6 +19,20 @@ pub struct HnItem {
     pub dead: Option<bool>,
 }
 
+/// Algolia API response for /items/{id}
+/// Returns nested comment tree in a single request
+#[derive(Debug, Deserialize)]
+pub struct AlgoliaItem {
+    pub id: u64,
+    pub author: Option<String>,
+    pub text: Option<String>,
+    pub created_at_i: Option<u64>,
+    #[serde(rename = "type")]
+    pub item_type: Option<String>,
+    #[serde(default)]
+    pub children: Vec<AlgoliaItem>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Story {
     pub id: u64,

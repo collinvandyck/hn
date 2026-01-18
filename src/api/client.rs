@@ -4,15 +4,19 @@ use std::time::Duration;
 use tracing::{debug, info, instrument, warn};
 
 use super::error::ApiError;
-use super::types::{Comment, Feed, HnItem, Story};
+use super::types::{AlgoliaItem, Comment, Feed, HnItem, Story};
 use crate::storage::{StorableComment, StorableStory, Storage};
 
-const API_BASE: &str = "https://hacker-news.firebaseio.com/v0";
+const DEFAULT_FIREBASE_API: &str = "https://hacker-news.firebaseio.com/v0";
+const DEFAULT_ALGOLIA_API: &str = "https://hn.algolia.com/api/v1";
 const PAGE_SIZE: usize = 30;
 
+#[derive(Clone)]
 pub struct HnClient {
     http: reqwest::Client,
     storage: Option<Storage>,
+    firebase_api: String,
+    algolia_api: String,
 }
 
 impl HnClient {
@@ -23,6 +27,21 @@ impl HnClient {
                 .build()
                 .expect("Failed to create HTTP client"),
             storage,
+            firebase_api: DEFAULT_FIREBASE_API.to_string(),
+            algolia_api: DEFAULT_ALGOLIA_API.to_string(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_api_urls(storage: Option<Storage>, firebase_api: &str, algolia_api: &str) -> Self {
+        Self {
+            http: reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .expect("Failed to create HTTP client"),
+            storage,
+            firebase_api: firebase_api.to_string(),
+            algolia_api: algolia_api.to_string(),
         }
     }
 
@@ -43,12 +62,17 @@ impl HnClient {
     }
 
     pub async fn fetch_feed_ids(&self, feed: Feed) -> Result<Vec<u64>, ApiError> {
-        let url = format!("{}/{}.json", API_BASE, feed.endpoint());
+        let url = format!("{}/{}.json", self.firebase_api, feed.endpoint());
         self.get_json(&url).await
     }
 
     async fn fetch_item(&self, id: u64) -> Result<HnItem, ApiError> {
-        let url = format!("{}/item/{}.json", API_BASE, id);
+        let url = format!("{}/item/{}.json", self.firebase_api, id);
+        self.get_json(&url).await
+    }
+
+    async fn fetch_algolia_item(&self, id: u64) -> Result<AlgoliaItem, ApiError> {
+        let url = format!("{}/items/{}", self.algolia_api, id);
         self.get_json(&url).await
     }
 
@@ -130,16 +154,13 @@ impl HnClient {
         Ok(stories)
     }
 
-    /// Fetches comments using BFS for parallelism, then reorders to DFS for display
-    #[instrument(skip(self, story), fields(story_id = story.id, max_depth))]
+    /// Fetches comments for a story, trying Algolia first then falling back to Firebase.
+    #[instrument(skip(self, story), fields(story_id = story.id))]
     pub async fn fetch_comments_flat(
         &self,
         story: &Story,
-        max_depth: usize,
         force_refresh: bool,
     ) -> Result<Vec<Comment>, ApiError> {
-        use std::collections::HashSet;
-
         info!("fetching comments");
 
         // Check storage for cached comments (unless forcing refresh)
@@ -152,12 +173,40 @@ impl HnClient {
             return Ok(order_cached_comments(comments, &story.kids));
         }
 
+        // Try Algolia first (single request for all comments)
+        match self.fetch_comments_algolia(story.id).await {
+            Ok(comments) => {
+                self.save_comments(story.id, &comments).await?;
+                info!(count = comments.len(), "fetched comments via Algolia");
+                return Ok(comments);
+            }
+            Err(e) => {
+                warn!("Algolia fetch failed, falling back to Firebase: {}", e);
+            }
+        }
+
+        // Fall back to Firebase (BFS, no depth limit)
+        let comments = self.fetch_comments_firebase(story).await?;
+        self.save_comments(story.id, &comments).await?;
+        info!(count = comments.len(), "fetched comments via Firebase");
+        Ok(comments)
+    }
+
+    /// Fetches all comments via Algolia's single-request endpoint.
+    async fn fetch_comments_algolia(&self, story_id: u64) -> Result<Vec<Comment>, ApiError> {
+        let item = self.fetch_algolia_item(story_id).await?;
+        Ok(flatten_algolia_tree(&item, 0))
+    }
+
+    /// Fetches comments via Firebase API (one request per comment, BFS).
+    async fn fetch_comments_firebase(&self, story: &Story) -> Result<Vec<Comment>, ApiError> {
+        use std::collections::HashSet;
+
         let mut items: HashMap<u64, HnItem> = HashMap::new();
         let mut attempted: HashSet<u64> = HashSet::new();
         let mut to_fetch: Vec<u64> = story.kids.clone();
-        let mut depth = 0;
 
-        while !to_fetch.is_empty() && depth <= max_depth {
+        while !to_fetch.is_empty() {
             let futures: Vec<_> = to_fetch.iter().map(|&id| self.fetch_item(id)).collect();
             let results = futures::future::join_all(futures).await;
 
@@ -168,31 +217,26 @@ impl HnClient {
                     if item.deleted.unwrap_or(false) || item.dead.unwrap_or(false) {
                         continue;
                     }
-                    if depth < max_depth {
-                        next_fetch.extend(&item.kids);
-                    }
+                    next_fetch.extend(&item.kids);
                     items.insert(id, item);
                 }
             }
             to_fetch = next_fetch;
-            depth += 1;
         }
 
-        let comments = build_comment_tree(items, &attempted, &story.kids);
+        Ok(build_comment_tree(items, &attempted, &story.kids))
+    }
 
-        // Write-through to storage
+    /// Saves comments to storage if available.
+    async fn save_comments(&self, story_id: u64, comments: &[Comment]) -> Result<(), ApiError> {
         if let Some(storage) = &self.storage {
             let storable: Vec<StorableComment> = comments
                 .iter()
-                .map(|c| {
-                    StorableComment::from_comment(c, story.id, find_parent_id(&comments, c.id))
-                })
+                .map(|c| StorableComment::from_comment(c, story_id, find_parent_id(comments, c.id)))
                 .collect();
-            storage.save_comments(story.id, &storable).await?;
+            storage.save_comments(story_id, &storable).await?;
         }
-
-        info!(count = comments.len(), "fetched comments");
-        Ok(comments)
+        Ok(())
     }
 }
 
@@ -262,18 +306,36 @@ fn order_cached_comments(cached: Vec<Comment>, root_kids: &[u64]) -> Vec<Comment
     build_tree(by_id, root_kids, |c| &c.kids, |c, _depth| Some(c))
 }
 
+/// Flattens nested Algolia response into DFS-ordered comments.
+fn flatten_algolia_tree(item: &AlgoliaItem, depth: usize) -> Vec<Comment> {
+    let mut comments = Vec::new();
+    for child in &item.children {
+        if child.item_type.as_deref() == Some("comment")
+            && let Some(comment) = algolia_to_comment(child, depth)
+        {
+            comments.push(comment);
+            comments.extend(flatten_algolia_tree(child, depth + 1));
+        }
+    }
+    comments
+}
+
+/// Converts an Algolia item to a Comment.
+fn algolia_to_comment(item: &AlgoliaItem, depth: usize) -> Option<Comment> {
+    let text = item.text.as_ref()?;
+    Some(Comment {
+        id: item.id,
+        text: html_escape::decode_html_entities(text).to_string(),
+        by: item.author.clone().unwrap_or_else(|| "[deleted]".into()),
+        time: item.created_at_i.unwrap_or(0),
+        depth,
+        kids: item.children.iter().map(|c| c.id).collect(),
+    })
+}
+
 impl Default for HnClient {
     fn default() -> Self {
         Self::new(None)
-    }
-}
-
-impl Clone for HnClient {
-    fn clone(&self) -> Self {
-        Self {
-            http: self.http.clone(),
-            storage: self.storage.clone(),
-        }
     }
 }
 
@@ -547,5 +609,351 @@ mod tests {
 
         assert_eq!(fresh_order, expected_order, "Fresh order incorrect");
         assert_eq!(cached_order, expected_order, "Cached order incorrect");
+    }
+
+    mod algolia {
+        use super::*;
+        use crate::api::types::AlgoliaItem;
+
+        /// Real Algolia response for story 1 (Y Combinator).
+        /// Linear nesting: story → comment 15 → comment 17 → comment 1079
+        const FIXTURE_STORY_1: &str = r#"{
+            "author": "pg",
+            "children": [{
+                "author": "sama",
+                "children": [{
+                    "author": "pg",
+                    "children": [{
+                        "author": "dmon",
+                        "children": [],
+                        "created_at_i": 1172441903,
+                        "id": 1079,
+                        "text": "sure",
+                        "type": "comment"
+                    }],
+                    "created_at_i": 1160423565,
+                    "id": 17,
+                    "text": "Is there anywhere to eat on Sandhill Road?",
+                    "type": "comment"
+                }],
+                "created_at_i": 1160423461,
+                "id": 15,
+                "text": "&#34;the rising star of venture capital&#34; -unknown VC eating lunch on SHR",
+                "type": "comment"
+            }],
+            "created_at_i": 1160418111,
+            "id": 1,
+            "type": "story"
+        }"#;
+
+        /// Real Algolia response for story 121003 (Ask HN: The Arc Effect).
+        /// Multiple top-level comments with varying nesting.
+        const FIXTURE_STORY_121003: &str = r#"{
+            "author": "pg",
+            "children": [
+                {
+                    "author": "pg",
+                    "children": [
+                        {"author": "byrneseyeview", "children": [], "created_at_i": 1203364041, "id": 121026, "text": "neat", "type": "comment"},
+                        {"author": "Tichy", "children": [], "created_at_i": 1203364696, "id": 121035, "text": "reply to pg", "type": "comment"}
+                    ],
+                    "created_at_i": 1203362760,
+                    "id": 121016,
+                    "text": "You can see two spikes in unique visitors due to Arc",
+                    "type": "comment"
+                },
+                {
+                    "author": "yters",
+                    "children": [
+                        {"author": "far33d", "children": [], "created_at_i": 1203395863, "id": 121171, "text": "response to yters", "type": "comment"}
+                    ],
+                    "created_at_i": 1203370876,
+                    "id": 121109,
+                    "text": "Does having 3 main hacker sites dilute quality?",
+                    "type": "comment"
+                },
+                {
+                    "author": "andreyf",
+                    "children": [],
+                    "created_at_i": 1203396157,
+                    "id": 121168,
+                    "text": "Why not just scale the weight given to a vote?",
+                    "type": "comment"
+                }
+            ],
+            "created_at_i": 1203361853,
+            "id": 121003,
+            "type": "story"
+        }"#;
+
+        #[test]
+        fn test_flatten_linear_nesting() {
+            let item: AlgoliaItem = serde_json::from_str(FIXTURE_STORY_1).unwrap();
+            let comments = flatten_algolia_tree(&item, 0);
+
+            assert_eq!(comments.len(), 3);
+
+            // Verify DFS order and depths
+            assert_eq!(comments[0].id, 15);
+            assert_eq!(comments[0].depth, 0);
+            assert_eq!(comments[0].by, "sama");
+
+            assert_eq!(comments[1].id, 17);
+            assert_eq!(comments[1].depth, 1);
+            assert_eq!(comments[1].by, "pg");
+
+            assert_eq!(comments[2].id, 1079);
+            assert_eq!(comments[2].depth, 2);
+            assert_eq!(comments[2].by, "dmon");
+        }
+
+        #[test]
+        fn test_flatten_multiple_branches() {
+            let item: AlgoliaItem = serde_json::from_str(FIXTURE_STORY_121003).unwrap();
+            let comments = flatten_algolia_tree(&item, 0);
+
+            // 3 top-level + 2 replies under first + 1 reply under second = 6 total
+            assert_eq!(comments.len(), 6);
+
+            // Verify DFS order: branch 1 fully explored before branch 2
+            let ids: Vec<u64> = comments.iter().map(|c| c.id).collect();
+            assert_eq!(ids, vec![121016, 121026, 121035, 121109, 121171, 121168]);
+
+            // Verify depths
+            assert_eq!(comments[0].depth, 0); // 121016
+            assert_eq!(comments[1].depth, 1); // 121026 (child of 121016)
+            assert_eq!(comments[2].depth, 1); // 121035 (child of 121016)
+            assert_eq!(comments[3].depth, 0); // 121109
+            assert_eq!(comments[4].depth, 1); // 121171 (child of 121109)
+            assert_eq!(comments[5].depth, 0); // 121168
+        }
+
+        #[test]
+        fn test_html_entity_decoding() {
+            let item: AlgoliaItem = serde_json::from_str(FIXTURE_STORY_1).unwrap();
+            let comments = flatten_algolia_tree(&item, 0);
+
+            // Comment 15 has &#34; which should be decoded to "
+            assert!(comments[0].text.contains('"'));
+            assert!(!comments[0].text.contains("&#34;"));
+        }
+
+        #[test]
+        fn test_kids_array_populated() {
+            let item: AlgoliaItem = serde_json::from_str(FIXTURE_STORY_1).unwrap();
+            let comments = flatten_algolia_tree(&item, 0);
+
+            // Comment 15 has child 17
+            assert_eq!(comments[0].kids, vec![17]);
+            // Comment 17 has child 1079
+            assert_eq!(comments[1].kids, vec![1079]);
+            // Comment 1079 has no children
+            assert!(comments[2].kids.is_empty());
+        }
+
+        #[test]
+        fn test_missing_author_defaults_to_deleted() {
+            let json = r#"{
+                "children": [{
+                    "children": [],
+                    "created_at_i": 1234567890,
+                    "id": 999,
+                    "text": "orphaned comment",
+                    "type": "comment"
+                }],
+                "id": 1,
+                "type": "story"
+            }"#;
+            let item: AlgoliaItem = serde_json::from_str(json).unwrap();
+            let comments = flatten_algolia_tree(&item, 0);
+
+            assert_eq!(comments.len(), 1);
+            assert_eq!(comments[0].by, "[deleted]");
+        }
+
+        #[test]
+        fn test_skips_items_without_text() {
+            let json = r#"{
+                "children": [
+                    {"author": "user1", "children": [], "created_at_i": 1, "id": 1, "text": "has text", "type": "comment"},
+                    {"author": "user2", "children": [], "created_at_i": 2, "id": 2, "type": "comment"},
+                    {"author": "user3", "children": [], "created_at_i": 3, "id": 3, "text": null, "type": "comment"}
+                ],
+                "id": 100,
+                "type": "story"
+            }"#;
+            let item: AlgoliaItem = serde_json::from_str(json).unwrap();
+            let comments = flatten_algolia_tree(&item, 0);
+
+            // Only the comment with text should be included
+            assert_eq!(comments.len(), 1);
+            assert_eq!(comments[0].id, 1);
+        }
+
+        #[test]
+        fn test_skips_non_comment_types() {
+            let json = r#"{
+                "children": [
+                    {"author": "user1", "children": [], "created_at_i": 1, "id": 1, "text": "comment", "type": "comment"},
+                    {"author": "user2", "children": [], "created_at_i": 2, "id": 2, "text": "poll", "type": "pollopt"}
+                ],
+                "id": 100,
+                "type": "story"
+            }"#;
+            let item: AlgoliaItem = serde_json::from_str(json).unwrap();
+            let comments = flatten_algolia_tree(&item, 0);
+
+            assert_eq!(comments.len(), 1);
+            assert_eq!(comments[0].id, 1);
+        }
+    }
+
+    mod fallback {
+        use super::*;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        fn make_story(id: u64, kids: Vec<u64>) -> Story {
+            Story {
+                id,
+                title: "Test Story".to_string(),
+                url: Some("https://example.com".to_string()),
+                score: 100,
+                by: "testuser".to_string(),
+                time: 1700000000,
+                descendants: kids.len() as u32,
+                kids,
+            }
+        }
+
+        /// Verifies that when Algolia returns 503, we fall back to Firebase.
+        #[tokio::test]
+        async fn test_falls_back_to_firebase_on_algolia_error() {
+            let algolia_server = MockServer::start().await;
+            let firebase_server = MockServer::start().await;
+
+            // Algolia returns 503
+            Mock::given(method("GET"))
+                .and(path("/items/999"))
+                .respond_with(ResponseTemplate::new(503))
+                .mount(&algolia_server)
+                .await;
+
+            // Firebase returns the comment
+            Mock::given(method("GET"))
+                .and(path("/item/1.json"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "id": 1,
+                    "type": "comment",
+                    "by": "firebase_user",
+                    "time": 1700000000,
+                    "text": "Comment from Firebase",
+                    "kids": []
+                })))
+                .mount(&firebase_server)
+                .await;
+
+            let client =
+                HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
+
+            let story = make_story(999, vec![1]);
+            let comments = client.fetch_comments_flat(&story, false).await.unwrap();
+
+            assert_eq!(comments.len(), 1);
+            assert_eq!(comments[0].id, 1);
+            assert_eq!(comments[0].by, "firebase_user");
+            assert_eq!(comments[0].text, "Comment from Firebase");
+        }
+
+        /// Verifies that Algolia is used when it succeeds.
+        #[tokio::test]
+        async fn test_uses_algolia_when_available() {
+            let algolia_server = MockServer::start().await;
+            let firebase_server = MockServer::start().await;
+
+            // Algolia returns the comment tree
+            Mock::given(method("GET"))
+                .and(path("/items/999"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "id": 999,
+                    "type": "story",
+                    "children": [{
+                        "id": 1,
+                        "type": "comment",
+                        "author": "algolia_user",
+                        "created_at_i": 1700000000,
+                        "text": "Comment from Algolia",
+                        "children": []
+                    }]
+                })))
+                .mount(&algolia_server)
+                .await;
+
+            // Firebase should NOT be called (no mock needed, will fail if called)
+
+            let client =
+                HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
+
+            let story = make_story(999, vec![1]);
+            let comments = client.fetch_comments_flat(&story, false).await.unwrap();
+
+            assert_eq!(comments.len(), 1);
+            assert_eq!(comments[0].id, 1);
+            assert_eq!(comments[0].by, "algolia_user");
+            assert_eq!(comments[0].text, "Comment from Algolia");
+        }
+
+        /// Verifies fallback handles nested Firebase comments correctly.
+        #[tokio::test]
+        async fn test_firebase_fallback_handles_nested_comments() {
+            let algolia_server = MockServer::start().await;
+            let firebase_server = MockServer::start().await;
+
+            // Algolia returns 500
+            Mock::given(method("GET"))
+                .and(path("/items/999"))
+                .respond_with(ResponseTemplate::new(500))
+                .mount(&algolia_server)
+                .await;
+
+            // Firebase returns nested comments
+            Mock::given(method("GET"))
+                .and(path("/item/1.json"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "id": 1,
+                    "type": "comment",
+                    "by": "parent",
+                    "time": 1700000000,
+                    "text": "Parent comment",
+                    "kids": [2]
+                })))
+                .mount(&firebase_server)
+                .await;
+
+            Mock::given(method("GET"))
+                .and(path("/item/2.json"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "id": 2,
+                    "type": "comment",
+                    "by": "child",
+                    "time": 1700000001,
+                    "text": "Child comment",
+                    "kids": []
+                })))
+                .mount(&firebase_server)
+                .await;
+
+            let client =
+                HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
+
+            let story = make_story(999, vec![1]);
+            let comments = client.fetch_comments_flat(&story, false).await.unwrap();
+
+            assert_eq!(comments.len(), 2);
+            assert_eq!(comments[0].id, 1);
+            assert_eq!(comments[0].depth, 0);
+            assert_eq!(comments[1].id, 2);
+            assert_eq!(comments[1].depth, 1);
+        }
     }
 }

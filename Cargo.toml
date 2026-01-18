@@ -53,3 +53,4 @@ lto = false
 tokio-test = "0.4"
 insta = "1.40"
 tempfile = "3"
+wiremock = "0.6"

@@ -824,7 +824,7 @@ impl App {
         let task_id = self.debug.start_task(task_desc);
 
         tokio::spawn(async move {
-            let result = client.fetch_comments_flat(&story, 5, force_refresh).await;
+            let result = client.fetch_comments_flat(&story, force_refresh).await;
             let _ = tx
                 .send(AsyncResult::Comments {
                     story_id,
