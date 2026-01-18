@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use tokio::sync::mpsc;
 
-use crate::api::{Comment, Feed, HnClient, Story};
+use crate::api::{ApiError, Comment, Feed, HnClient, Story};
 use crate::comment_tree::CommentTree;
 use crate::theme::ResolvedTheme;
 use crate::time::Clock;
@@ -13,17 +13,17 @@ pub enum AsyncResult {
     Stories {
         generation: u64,
         task_id: u64,
-        result: Result<Vec<Story>, String>,
+        result: Result<Vec<Story>, ApiError>,
     },
     MoreStories {
         generation: u64,
         task_id: u64,
-        result: Result<Vec<Story>, String>,
+        result: Result<Vec<Story>, ApiError>,
     },
     Comments {
         story_id: u64,
         task_id: u64,
-        result: Result<Vec<Comment>, String>,
+        result: Result<Vec<Comment>, ApiError>,
     },
 }
 
@@ -252,8 +252,7 @@ impl App {
                         }
                     }
                     Err(e) => {
-                        self.load
-                            .set_error(format!("Failed to load stories: {}", e));
+                        self.load.set_error(e.user_message());
                         self.load.set_loading(false);
                     }
                 }
@@ -289,7 +288,7 @@ impl App {
                         }
                     }
                     Err(e) => {
-                        self.load.set_error(format!("Failed to load more: {}", e));
+                        self.load.set_error(e.user_message());
                         self.load.loading_more = false;
                     }
                 }
@@ -319,8 +318,7 @@ impl App {
                         self.load.set_loading(false);
                     }
                     Err(e) => {
-                        self.load
-                            .set_error(format!("Failed to load comments: {}", e));
+                        self.load.set_error(e.user_message());
                         self.load.set_loading(false);
                     }
                 }
@@ -693,10 +691,7 @@ impl App {
             if clear_cache {
                 client.clear_cache().await;
             }
-            let result = client
-                .fetch_stories(feed, page)
-                .await
-                .map_err(|e| e.to_string());
+            let result = client.fetch_stories(feed, page).await;
 
             let msg = if is_more {
                 AsyncResult::MoreStories {
@@ -735,10 +730,7 @@ impl App {
             if clear_cache {
                 client.clear_cache().await;
             }
-            let result = client
-                .fetch_comments_flat(&story, 5)
-                .await
-                .map_err(|e| e.to_string());
+            let result = client.fetch_comments_flat(&story, 5).await;
             let _ = tx
                 .send(AsyncResult::Comments {
                     story_id,

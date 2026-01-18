@@ -1,9 +1,9 @@
-use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
+use super::error::ApiError;
 use super::types::{Comment, Feed, HnItem, Story};
 
 const API_BASE: &str = "https://hacker-news.firebaseio.com/v0";
@@ -41,21 +41,24 @@ impl HnClient {
         self.item_cache.write().await.clear();
     }
 
-    pub async fn fetch_feed_ids(&self, feed: Feed) -> Result<Vec<u64>> {
+    pub async fn fetch_feed_ids(&self, feed: Feed) -> Result<Vec<u64>, ApiError> {
         let url = format!("{}/{}.json", API_BASE, feed.endpoint());
-        let ids: Vec<u64> = self
-            .http
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to fetch feed")?
+        let response = self.http.get(&url).send().await?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(ApiError::HttpStatus(
+                status.as_u16(),
+                status.canonical_reason().unwrap_or("").into(),
+            ));
+        }
+        let ids: Vec<u64> = response
             .json()
             .await
-            .context("Failed to parse feed IDs")?;
+            .map_err(|e| ApiError::Parse(e.to_string()))?;
         Ok(ids)
     }
 
-    async fn fetch_item(&self, id: u64) -> Result<HnItem> {
+    async fn fetch_item(&self, id: u64) -> Result<HnItem, ApiError> {
         {
             let cache = self.item_cache.read().await;
             if let Some(entry) = cache.get(&id)
@@ -66,15 +69,18 @@ impl HnClient {
         }
 
         let url = format!("{}/item/{}.json", API_BASE, id);
-        let item: HnItem = self
-            .http
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to fetch item")?
+        let response = self.http.get(&url).send().await?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(ApiError::HttpStatus(
+                status.as_u16(),
+                status.canonical_reason().unwrap_or("").into(),
+            ));
+        }
+        let item: HnItem = response
             .json()
             .await
-            .context("Failed to parse item")?;
+            .map_err(|e| ApiError::Parse(e.to_string()))?;
 
         {
             let mut cache = self.item_cache.write().await;
@@ -90,7 +96,7 @@ impl HnClient {
         Ok(item)
     }
 
-    pub async fn fetch_stories(&self, feed: Feed, page: usize) -> Result<Vec<Story>> {
+    pub async fn fetch_stories(&self, feed: Feed, page: usize) -> Result<Vec<Story>, ApiError> {
         let ids = self.fetch_feed_ids(feed).await?;
         let start = page * PAGE_SIZE;
         let end = (start + PAGE_SIZE).min(ids.len());
@@ -103,7 +109,7 @@ impl HnClient {
         self.fetch_stories_by_ids(page_ids).await
     }
 
-    pub async fn fetch_stories_by_ids(&self, ids: &[u64]) -> Result<Vec<Story>> {
+    pub async fn fetch_stories_by_ids(&self, ids: &[u64]) -> Result<Vec<Story>, ApiError> {
         let futures: Vec<_> = ids.iter().map(|&id| self.fetch_item(id)).collect();
         let results = futures::future::join_all(futures).await;
 
@@ -121,7 +127,7 @@ impl HnClient {
         &self,
         story: &Story,
         max_depth: usize,
-    ) -> Result<Vec<Comment>> {
+    ) -> Result<Vec<Comment>, ApiError> {
         use std::collections::HashSet;
 
         let mut items: HashMap<u64, HnItem> = HashMap::new();
@@ -257,7 +263,10 @@ mod tests {
         let mut attempted: HashSet<u64> = HashSet::new();
 
         // Parent comment with kids [2, 3] - child 3 was attempted but deleted
-        items.insert(1, make_comment_item(1, "parent", "Parent comment", vec![2, 3]));
+        items.insert(
+            1,
+            make_comment_item(1, "parent", "Parent comment", vec![2, 3]),
+        );
         items.insert(2, make_comment_item(2, "child", "Child comment", vec![]));
 
         // Both children were attempted, but child 3 was deleted (not in items)

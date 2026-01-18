@@ -12,6 +12,7 @@ use crate::api::{Feed, Story};
 use crate::app::App;
 use crate::theme::ResolvedTheme;
 use crate::time::{Clock, format_relative};
+use crate::views::common::render_error;
 use crate::views::status_bar::StatusBar;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
@@ -68,15 +69,7 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.theme;
 
     if let Some(err) = &app.load.error {
-        let error = Paragraph::new(err.as_str())
-            .style(Style::default().fg(theme.error))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(theme.border))
-                    .title("Error"),
-            );
-        frame.render_widget(error, area);
+        render_error(frame, err, theme, area);
         return;
     }
 

@@ -13,6 +13,7 @@ use crate::api::Comment;
 use crate::app::{App, View};
 use crate::theme::ResolvedTheme;
 use crate::time::{Clock, format_relative};
+use crate::views::common::{render_error, render_loading};
 use crate::views::html::strip_html;
 use crate::views::status_bar::StatusBar;
 use crate::views::tree::{
@@ -51,28 +52,12 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.theme;
 
     if app.load.loading {
-        let loading = Paragraph::new("Loading comments...")
-            .style(Style::default().fg(theme.warning))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(theme.border))
-                    .title("Comments"),
-            );
-        frame.render_widget(loading, area);
+        render_loading(frame, "Loading comments...", "Comments", theme, area);
         return;
     }
 
     if let Some(err) = &app.load.error {
-        let error = Paragraph::new(err.as_str())
-            .style(Style::default().fg(theme.error))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(theme.border))
-                    .title("Error"),
-            );
-        frame.render_widget(error, area);
+        render_error(frame, err, theme, area);
         return;
     }
 

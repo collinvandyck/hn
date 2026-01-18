@@ -1,4 +1,5 @@
 pub mod comments;
+pub mod common;
 pub mod debug;
 pub mod html;
 pub mod spinner;

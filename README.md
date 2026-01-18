@@ -5,7 +5,7 @@ a terminal ui for hacker news.
 i wanted something that felt like reading hn but without leaving the terminal. this is that. it works well enough that i use it daily, which is about all i can promise.
 
 ```
-cargo install --git https://github.com/collinvandyck/lima-hn
+cargo install --path .
 ```
 
 the binary is called `hn`.
