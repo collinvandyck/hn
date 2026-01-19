@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Clean up orphaned harness processes and sockets
+# Run this to recover from abandoned test sessions
+
+# Find and kill orphaned processes (use pgrep + kill to avoid self-match)
+for pattern in 'agent-harness' 'target/release/hn --dark' 'target/debug/hn --dark'; do
+    pids=$(pgrep -f "$pattern" 2>/dev/null) || true
+    for pid in $pids; do
+        kill "$pid" 2>/dev/null || true
+    done
+done
+
+# Clean up any nc processes connected to harness sockets
+for sock in /tmp/hn-harness.sock /tmp/hn-test*.sock /tmp/hn.sock; do
+    fuser -k "$sock" 2>/dev/null || true
+done
+
+# Clean up socket files
+rm -f /tmp/hn-harness.sock /tmp/hn-harness.sock.pid
+rm -f /tmp/hn-test*.sock /tmp/hn-test*.sock.pid
+rm -f /tmp/hn.sock /tmp/hn.sock.pid
+
+echo "cleanup complete"

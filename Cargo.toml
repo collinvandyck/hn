@@ -7,6 +7,10 @@ edition = "2024"
 name = "hn"
 path = "src/main.rs"
 
+[[bin]]
+name = "agent-harness"
+path = "src/bin/agent-harness.rs"
+
 [dependencies]
 ratatui = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }
@@ -59,3 +63,11 @@ tokio-test = "0.4"
 insta = "1.40"
 tempfile = "3"
 wiremock = "0.6"
+rexpect = "0.6"
+vt100 = "0.15"
+
+[dependencies.portable-pty]
+version = "0.9"
+
+[dependencies.vt100]
+version = "0.15"

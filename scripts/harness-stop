@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Stop the harness gracefully, with fallback to kill
+set -e
+
+SOCKET="${1:-/tmp/hn-harness.sock}"
+PIDFILE="${SOCKET}.pid"
+
+# Try graceful quit first
+if [ -S "$SOCKET" ]; then
+    echo '{"cmd":"quit"}' | nc -q 1 -w 2 -U "$SOCKET" 2>/dev/null || true
+    sleep 0.5
+fi
+
+# Kill by PID if we have it
+if [ -f "$PIDFILE" ]; then
+    PID=$(cat "$PIDFILE")
+    if kill -0 "$PID" 2>/dev/null; then
+        kill "$PID" 2>/dev/null || true
+        # Wait briefly for clean exit
+        for _ in 1 2 3 4 5; do
+            kill -0 "$PID" 2>/dev/null || break
+            sleep 0.2
+        done
+        # Force kill if still alive
+        kill -9 "$PID" 2>/dev/null || true
+    fi
+    rm -f "$PIDFILE"
+fi
+
+# Clean up socket
+rm -f "$SOCKET"
+
+echo "stopped"

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Start the agent harness and wait for socket to be ready
+set -e
+
+SOCKET="${1:-/tmp/hn-harness.sock}"
+TIMEOUT="${2:-10}"
+
+# Clean up any existing socket
+rm -f "$SOCKET"
+
+# Start harness in background
+mise exec -- cargo run --release --bin agent-harness -- "$SOCKET" 2>&1 &
+PID=$!
+
+# Write PID file for cleanup
+echo "$PID" > "${SOCKET}.pid"
+
+# Wait for socket to appear
+elapsed=0
+while [ ! -S "$SOCKET" ] && [ $elapsed -lt $TIMEOUT ]; do
+    sleep 0.5
+    elapsed=$((elapsed + 1))
+    # Check if process died
+    if ! kill -0 "$PID" 2>/dev/null; then
+        echo "harness process died" >&2
+        exit 1
+    fi
+done
+
+if [ ! -S "$SOCKET" ]; then
+    echo "timeout waiting for socket" >&2
+    kill "$PID" 2>/dev/null || true
+    exit 1
+fi
+
+# Wait for TUI to initialize (harness has internal 3s delay, add buffer)
+sleep 1
+
+echo "$SOCKET"

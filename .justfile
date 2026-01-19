@@ -3,10 +3,10 @@ alias i := install
 default: run
 
 run:
-    cargo run
+    cargo run --bin hn
 
 rr:
-    cargo run --release
+    cargo run --release --bin hn
 
 run-theme theme:
     cargo run -- --theme {{ theme }}

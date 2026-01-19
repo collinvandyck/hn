@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Send a command to the harness and print the response
+# Usage: harness-cmd <socket> <json-command>
+# Example: harness-cmd /tmp/hn-harness.sock '{"cmd":"screen"}'
+set -e
+
+SOCKET="${1:?usage: harness-cmd <socket> <json-command>}"
+CMD="${2:?usage: harness-cmd <socket> <json-command>}"
+
+if [ ! -S "$SOCKET" ]; then
+    echo "socket not found: $SOCKET" >&2
+    exit 1
+fi
+
+# Use timeout and -q to ensure nc exits after receiving response
+# -q 1: quit 1 second after EOF on stdin
+# -w 5: timeout after 5 seconds total
+echo "$CMD" | nc -q 1 -w 5 -U "$SOCKET"
