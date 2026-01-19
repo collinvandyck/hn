@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -27,9 +27,6 @@ pub enum AsyncResult {
         story_id: u64,
         task_id: u64,
         result: Result<Vec<Comment>, ApiError>,
-    },
-    ReadStoryIds {
-        ids: HashSet<u64>,
     },
 }
 
@@ -224,8 +221,6 @@ pub struct App {
     pub config_dir: Option<PathBuf>,
     // Flash message for clipboard feedback
     pub flash_message: Option<(String, Instant)>,
-    // Read story tracking
-    pub read_story_ids: HashSet<u64>,
 }
 
 impl App {
@@ -257,7 +252,6 @@ impl App {
             theme_picker: None,
             config_dir,
             flash_message: None,
-            read_story_ids: HashSet::new(),
         }
     }
 
@@ -370,9 +364,6 @@ impl App {
                         }
                     }
                 }
-            }
-            AsyncResult::ReadStoryIds { ids } => {
-                self.read_story_ids = ids;
             }
         }
     }
@@ -714,12 +705,16 @@ impl App {
         })
     }
 
-    pub fn is_story_read(&self, id: u64) -> bool {
-        self.read_story_ids.contains(&id)
-    }
-
     fn mark_story_read(&mut self, id: u64) {
-        if self.read_story_ids.insert(id) {
+        if let Some(story) = self.stories.iter_mut().find(|s| s.id == id)
+            && story.read_at.is_none()
+        {
+            story.read_at = Some(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            );
             self.spawn_mark_story_read(id);
         }
     }
@@ -916,18 +911,6 @@ impl App {
             });
         }
     }
-
-    pub fn spawn_load_read_story_ids(&self) {
-        if let Some(storage) = self.client.storage() {
-            let storage = storage.clone();
-            let tx = self.result_tx.clone();
-            tokio::spawn(async move {
-                if let Ok(ids) = storage.get_read_story_ids().await {
-                    let _ = tx.send(AsyncResult::ReadStoryIds { ids }).await;
-                }
-            });
-        }
-    }
 }
 
 #[cfg(test)]
@@ -961,6 +944,7 @@ mod tests {
                 time: 0,
                 descendants: 0,
                 kids: vec![],
+                read_at: None,
             },
             Story {
                 id: 2,
@@ -971,6 +955,7 @@ mod tests {
                 time: 0,
                 descendants: 0,
                 kids: vec![],
+                read_at: None,
             },
         ];
 

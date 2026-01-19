@@ -20,6 +20,7 @@ pub struct StorableStory {
     pub descendants: u32,
     pub kids: Vec<u64>,
     pub fetched_at: u64,
+    pub read_at: Option<u64>,
 }
 
 impl StorableStory {
@@ -41,6 +42,7 @@ impl From<&Story> for StorableStory {
             descendants: story.descendants,
             kids: story.kids.clone(),
             fetched_at: now_unix(),
+            read_at: story.read_at,
         }
     }
 }
@@ -56,6 +58,7 @@ impl From<StorableStory> for Story {
             time: stored.time,
             descendants: stored.descendants,
             kids: stored.kids,
+            read_at: stored.read_at,
         }
     }
 }

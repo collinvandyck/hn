@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use rusqlite::{Connection, params, params_from_iter};
 
 use crate::api::Feed;
@@ -23,9 +21,20 @@ fn json_to_kids(json: &str) -> Vec<u64> {
 }
 
 pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<(), StorageError> {
+    // Use INSERT ... ON CONFLICT to preserve read_at if already set
     conn.execute(
-        "INSERT OR REPLACE INTO stories (id, title, url, score, by, time, descendants, kids, fetched_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO stories (id, title, url, score, by, time, descendants, kids, fetched_at, read_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            url = excluded.url,
+            score = excluded.score,
+            by = excluded.by,
+            time = excluded.time,
+            descendants = excluded.descendants,
+            kids = excluded.kids,
+            fetched_at = excluded.fetched_at,
+            read_at = COALESCE(stories.read_at, excluded.read_at)",
         params![
             story.id as i64,
             story.title,
@@ -36,6 +45,7 @@ pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<(), Storag
             story.descendants as i64,
             kids_to_json(&story.kids),
             story.fetched_at as i64,
+            story.read_at.map(|t| t as i64),
         ],
     )?;
     Ok(())
@@ -43,7 +53,7 @@ pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<(), Storag
 
 pub fn get_story(conn: &Connection, id: u64) -> Result<Option<StorableStory>, StorageError> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, url, score, by, time, descendants, kids, fetched_at
+        "SELECT id, title, url, score, by, time, descendants, kids, fetched_at, read_at
          FROM stories WHERE id = ?1",
     )?;
 
@@ -59,6 +69,7 @@ pub fn get_story(conn: &Connection, id: u64) -> Result<Option<StorableStory>, St
             descendants: row.get::<_, i64>(6)? as u32,
             kids: json_to_kids(&kids_json),
             fetched_at: row.get::<_, i64>(8)? as u64,
+            read_at: row.get::<_, Option<i64>>(9)?.map(|t| t as u64),
         })
     });
 
@@ -239,14 +250,4 @@ pub fn mark_story_read(conn: &Connection, id: u64) -> Result<(), StorageError> {
         params![now_unix() as i64, id as i64],
     )?;
     Ok(())
-}
-
-pub fn get_read_story_ids(conn: &Connection) -> Result<HashSet<u64>, StorageError> {
-    let mut stmt = conn.prepare("SELECT id FROM stories WHERE read_at IS NOT NULL")?;
-    let rows = stmt.query_map([], |row| Ok(row.get::<_, i64>(0)? as u64))?;
-    let mut ids = HashSet::new();
-    for row in rows {
-        ids.insert(row?);
-    }
-    Ok(ids)
 }

@@ -1,6 +1,5 @@
 //! Test data builders for view testing.
 
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -29,6 +28,7 @@ pub struct StoryBuilder {
     time: u64,
     descendants: u32,
     kids: Vec<u64>,
+    read_at: Option<u64>,
 }
 
 impl Default for StoryBuilder {
@@ -49,6 +49,7 @@ impl StoryBuilder {
             time: 1700000000,
             descendants: 10,
             kids: vec![],
+            read_at: None,
         }
     }
 
@@ -97,6 +98,11 @@ impl StoryBuilder {
         self
     }
 
+    pub fn read(mut self) -> Self {
+        self.read_at = Some(1700000000);
+        self
+    }
+
     pub fn build(self) -> Story {
         Story {
             id: self.id,
@@ -107,6 +113,7 @@ impl StoryBuilder {
             time: self.time,
             descendants: self.descendants,
             kids: self.kids,
+            read_at: self.read_at,
         }
     }
 }
@@ -200,7 +207,6 @@ pub struct TestAppBuilder {
     clock: Arc<dyn Clock>,
     viewport_height: Option<u16>,
     config_dir: Option<PathBuf>,
-    read_story_ids: HashSet<u64>,
 }
 
 impl Default for TestAppBuilder {
@@ -231,7 +237,6 @@ impl TestAppBuilder {
             clock: fixed_clock(TEST_NOW),
             viewport_height: None,
             config_dir: None,
-            read_story_ids: HashSet::new(),
         }
     }
 
@@ -311,11 +316,6 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn read_story_ids(mut self, ids: Vec<u64>) -> Self {
-        self.read_story_ids = ids.into_iter().collect();
-        self
-    }
-
     pub fn build(self) -> App {
         let (result_tx, result_rx) = mpsc::channel(10);
 
@@ -357,7 +357,6 @@ impl TestAppBuilder {
             theme_picker: None,
             config_dir: self.config_dir,
             flash_message: None,
-            read_story_ids: self.read_story_ids,
         }
     }
 }

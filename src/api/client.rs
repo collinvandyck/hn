@@ -500,6 +500,7 @@ mod tests {
             descendants: 7,
             kids: story_kids.clone(),
             fetched_at: 1700000000,
+            read_at: None,
         };
         storage.save_story(&story).await.unwrap();
 
@@ -579,6 +580,7 @@ mod tests {
             descendants: 5,
             kids: story_kids.clone(),
             fetched_at: 1700000000,
+            read_at: None,
         };
         storage.save_story(&story).await.unwrap();
 
@@ -815,6 +817,7 @@ mod tests {
                 time: 1700000000,
                 descendants: kids.len() as u32,
                 kids,
+                read_at: None,
             }
         }
 

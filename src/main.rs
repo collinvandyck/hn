@@ -165,7 +165,6 @@ async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
     let mut tick = interval(Duration::from_millis(16));
     let mut last_height: Option<u16> = None;
 
-    app.spawn_load_read_story_ids();
     app.load_stories();
 
     loop {

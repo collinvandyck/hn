@@ -45,6 +45,7 @@ pub struct Story {
     pub time: u64,
     pub descendants: u32,
     pub kids: Vec<u64>,
+    pub read_at: Option<u64>,
 }
 
 impl Story {
@@ -58,7 +59,12 @@ impl Story {
             time: item.time.unwrap_or(0),
             descendants: item.descendants.unwrap_or(0),
             kids: item.kids,
+            read_at: None,
         })
+    }
+
+    pub fn is_read(&self) -> bool {
+        self.read_at.is_some()
     }
 
     pub fn domain(&self) -> &str {
@@ -196,6 +202,7 @@ mod tests {
             time: 0,
             descendants: 0,
             kids: vec![],
+            read_at: None,
         };
         assert_eq!(story.domain(), "example.com");
     }
@@ -211,6 +218,7 @@ mod tests {
             time: 0,
             descendants: 0,
             kids: vec![],
+            read_at: None,
         };
         assert_eq!(story.domain(), "self");
     }

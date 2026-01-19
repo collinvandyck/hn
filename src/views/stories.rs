@@ -77,10 +77,7 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
         .stories
         .iter()
         .enumerate()
-        .map(|(i, story)| {
-            let is_read = app.is_story_read(story.id);
-            story_to_list_item(story, i + 1, theme, &app.clock, is_read)
-        })
+        .map(|(i, story)| story_to_list_item(story, i + 1, theme, &app.clock))
         .collect();
 
     let list = List::new(items)
@@ -107,11 +104,10 @@ fn story_to_list_item(
     rank: usize,
     theme: &ResolvedTheme,
     clock: &Arc<dyn Clock>,
-    is_read: bool,
 ) -> ListItem<'static> {
     let style = |color| {
         let base = Style::default().fg(color);
-        if is_read {
+        if story.is_read() {
             base.add_modifier(Modifier::DIM)
         } else {
             base
@@ -230,12 +226,34 @@ mod tests {
 
     #[test]
     fn test_stories_view_read_stories() {
-        let stories = sample_stories();
-        // Mark stories 1 and 3 as read
-        let read_ids = vec![stories[0].id, stories[2].id];
+        use crate::test_utils::StoryBuilder;
+
+        // Create stories with some marked as read
+        let stories = vec![
+            StoryBuilder::new()
+                .id(1)
+                .title("Read Story One")
+                .url("https://example.com/1")
+                .score(100)
+                .read() // Mark as read
+                .build(),
+            StoryBuilder::new()
+                .id(2)
+                .title("Unread Story Two")
+                .url("https://example.com/2")
+                .score(200)
+                .build(),
+            StoryBuilder::new()
+                .id(3)
+                .title("Read Story Three")
+                .url("https://example.com/3")
+                .score(300)
+                .read() // Mark as read
+                .build(),
+        ];
+
         let app = TestAppBuilder::new()
             .with_stories(stories)
-            .read_story_ids(read_ids)
             .selected(1) // Select an unread story
             .build();
 
