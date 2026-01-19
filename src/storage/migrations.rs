@@ -3,18 +3,23 @@ use rusqlite::Connection;
 use super::StorageError;
 use crate::time::now_unix;
 
-#[allow(dead_code)] // Used by future features
-pub const CURRENT_VERSION: i64 = 1;
+pub const CURRENT_VERSION: i64 = 2;
 
 struct Migration {
     version: i64,
     sql: &'static str,
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: include_str!("sql/001_initial.sql"),
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: include_str!("sql/001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        sql: include_str!("sql/002_normalize_feeds.sql"),
+    },
+];
 
 pub fn run_migrations(conn: &Connection) -> Result<(), StorageError> {
     conn.execute(

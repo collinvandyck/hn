@@ -148,20 +148,15 @@ fn resolve_theme(
 }
 
 async fn run_tui(cli: Cli, mut terminal: tui::Tui) -> Result<()> {
-    let config_dir = settings::config_dir(cli.config_dir.as_ref());
-    let (settings, storage) = match config_dir.as_ref() {
-        Some(dir) => {
-            let path = settings::settings_path(dir);
-            let settings = Settings::load(&path)
-                .with_context(|| format!("Failed to load settings from {}", path.display()))?;
-            let storage = Storage::open(StorageLocation::Path(settings::db_path(dir)))
-                .context("Failed to open storage database")?;
-            (settings, Some(storage))
-        }
-        None => (Settings::default(), None),
-    };
-    let resolved_theme = resolve_theme(&cli, &settings, config_dir.as_ref())?;
-    let mut app = App::new(resolved_theme, config_dir, storage);
+    let config_dir = settings::config_dir(cli.config_dir.as_ref())
+        .context("Could not determine config directory. Set XDG_CONFIG_HOME or use --config-dir")?;
+    let path = settings::settings_path(&config_dir);
+    let settings = Settings::load(&path)
+        .with_context(|| format!("Failed to load settings from {}", path.display()))?;
+    let storage = Storage::open(StorageLocation::Path(settings::db_path(&config_dir)))
+        .context("Failed to open storage database")?;
+    let resolved_theme = resolve_theme(&cli, &settings, Some(&config_dir))?;
+    let mut app = App::new(resolved_theme, Some(config_dir), storage);
     let mut events = CrosstermEvents::new();
     let mut tick = interval(Duration::from_millis(16));
     let mut last_height: Option<u16> = None;

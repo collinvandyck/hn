@@ -17,7 +17,6 @@ pub struct FetchedStories {
     pub stories: Vec<Story>,
     pub fetched_at: u64,
 }
-
 /// Comments with their fetch timestamp from storage.
 pub struct FetchedComments {
     pub comments: Vec<Comment>,
@@ -27,13 +26,13 @@ pub struct FetchedComments {
 #[derive(Clone)]
 pub struct HnClient {
     http: reqwest::Client,
-    storage: Option<Storage>,
+    storage: Storage,
     firebase_api: String,
     algolia_api: String,
 }
 
 impl HnClient {
-    pub fn new(storage: Option<Storage>) -> Self {
+    pub fn new(storage: Storage) -> Self {
         Self {
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
@@ -46,7 +45,7 @@ impl HnClient {
     }
 
     #[cfg(test)]
-    pub fn with_api_urls(storage: Option<Storage>, firebase_api: &str, algolia_api: &str) -> Self {
+    pub fn with_api_urls(storage: Storage, firebase_api: &str, algolia_api: &str) -> Self {
         Self {
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
@@ -58,8 +57,8 @@ impl HnClient {
         }
     }
 
-    pub fn storage(&self) -> Option<&Storage> {
-        self.storage.as_ref()
+    pub fn storage(&self) -> &Storage {
+        &self.storage
     }
 
     async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T, ApiError> {
@@ -103,15 +102,11 @@ impl HnClient {
         info!("fetching stories");
         // Check for cached feed (page 0 only, unless force refresh)
         let (ids, fetched_at) = if page == 0 && !force_refresh {
-            if let Some(storage) = &self.storage {
-                if let Ok(Some(cached)) = storage.get_fresh_feed(feed).await {
-                    info!(source = "cache", "using cached feed");
-                    (cached.ids, cached.fetched_at)
-                } else {
-                    self.fetch_and_save_feed(feed).await?
-                }
+            if let Ok(Some(cached)) = self.storage.get_fresh_feed(feed).await {
+                info!(source = "cache", "using cached feed");
+                (cached.ids, cached.fetched_at)
             } else {
-                (self.fetch_feed_ids(feed).await?, now_unix())
+                self.fetch_and_save_feed(feed).await?
             }
         } else if page == 0 {
             // Force refresh on page 0
@@ -142,9 +137,7 @@ impl HnClient {
     async fn fetch_and_save_feed(&self, feed: Feed) -> Result<(Vec<u64>, u64), ApiError> {
         let ids = self.fetch_feed_ids(feed).await?;
         let fetched_at = now_unix();
-        if let Some(storage) = &self.storage {
-            storage.save_feed(feed, &ids).await?;
-        }
+        self.storage.save_feed(feed, &ids).await?;
         Ok((ids, fetched_at))
     }
 
@@ -153,55 +146,44 @@ impl HnClient {
         ids: &[u64],
         force_refresh: bool,
     ) -> Result<Vec<Story>, ApiError> {
-        let mut stories = Vec::with_capacity(ids.len());
+        let mut stories: Vec<Story> = Vec::with_capacity(ids.len());
         let mut to_fetch = Vec::new();
-
         // Check storage for cached stories (unless forcing refresh)
         if !force_refresh {
-            if let Some(storage) = &self.storage {
-                for &id in ids {
-                    if let Ok(Some(cached)) = storage.get_fresh_story(id).await {
-                        debug!(story_id = id, "cache hit");
-                        stories.push(cached.into());
-                    } else {
-                        debug!(story_id = id, "cache miss");
-                        to_fetch.push(id);
-                    }
+            for &id in ids {
+                if let Ok(Some(cached)) = self.storage.get_fresh_story(id).await {
+                    debug!(story_id = id, "cache hit");
+                    stories.push(cached.into());
+                } else {
+                    debug!(story_id = id, "cache miss");
+                    to_fetch.push(id);
                 }
-            } else {
-                to_fetch.extend_from_slice(ids);
             }
         } else {
             to_fetch.extend_from_slice(ids);
         }
-
         // Fetch remaining from API
         if !to_fetch.is_empty() {
             let futures: Vec<_> = to_fetch.iter().map(|&id| self.fetch_item(id)).collect();
             let results = futures::future::join_all(futures).await;
-
             let fetched: Vec<Story> = results
                 .into_iter()
                 .filter_map(|r| r.ok())
                 .filter_map(Story::from_item)
                 .collect();
-
             // Write-through to storage, using returned row to get preserved read_at
-            if let Some(storage) = &self.storage {
-                for story in fetched {
-                    let saved = storage.save_story(&StorableStory::from(&story)).await?;
-                    stories.push(saved.into());
-                }
-            } else {
-                stories.extend(fetched);
+            for story in fetched {
+                let saved = self
+                    .storage
+                    .save_story(&StorableStory::from(&story))
+                    .await?;
+                stories.push(saved.into());
             }
         }
-
         // Re-sort by original id order
         let id_positions: HashMap<u64, usize> =
             ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
         stories.sort_by_key(|s| id_positions.get(&s.id).copied().unwrap_or(usize::MAX));
-
         Ok(stories)
     }
 
@@ -215,8 +197,7 @@ impl HnClient {
         info!("fetching comments");
         // Check storage for cached comments (unless forcing refresh)
         if !force_refresh
-            && let Some(storage) = &self.storage
-            && let Ok(Some((cached, fetched_at))) = storage.get_fresh_comments(story.id).await
+            && let Ok(Some((cached, fetched_at))) = self.storage.get_fresh_comments(story.id).await
         {
             info!(count = cached.len(), source = "cache", "loaded comments");
             let comments: Vec<Comment> = cached.into_iter().map(|c| c.into()).collect();
@@ -293,15 +274,13 @@ impl HnClient {
         Ok(build_comment_tree(items, &attempted, &story.kids))
     }
 
-    /// Saves comments to storage if available.
+    /// Saves comments to storage.
     async fn save_comments(&self, story_id: u64, comments: &[Comment]) -> Result<(), ApiError> {
-        if let Some(storage) = &self.storage {
-            let storable: Vec<StorableComment> = comments
-                .iter()
-                .map(|c| StorableComment::from_comment(c, story_id, find_parent_id(comments, c.id)))
-                .collect();
-            storage.save_comments(story_id, &storable).await?;
-        }
+        let storable: Vec<StorableComment> = comments
+            .iter()
+            .map(|c| StorableComment::from_comment(c, story_id, find_parent_id(comments, c.id)))
+            .collect();
+        self.storage.save_comments(story_id, &storable).await?;
         Ok(())
     }
 }
@@ -399,16 +378,15 @@ fn algolia_to_comment(item: &AlgoliaItem, depth: usize) -> Option<Comment> {
     })
 }
 
-impl Default for HnClient {
-    fn default() -> Self {
-        Self::new(None)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::{Storage, StorageLocation};
     use std::collections::HashSet;
+
+    fn test_storage() -> Storage {
+        Storage::open(StorageLocation::InMemory).unwrap()
+    }
 
     fn make_comment_item(id: u64, by: &str, text: &str, kids: Vec<u64>) -> HnItem {
         HnItem {
@@ -430,7 +408,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_creation() {
-        let client = HnClient::new(None);
+        let client = HnClient::new(test_storage());
         // Just verify it doesn't panic
         drop(client);
     }
@@ -880,14 +858,12 @@ mod tests {
         async fn test_falls_back_to_firebase_on_algolia_error() {
             let algolia_server = MockServer::start().await;
             let firebase_server = MockServer::start().await;
-
             // Algolia returns 503
             Mock::given(method("GET"))
                 .and(path("/items/999"))
                 .respond_with(ResponseTemplate::new(503))
                 .mount(&algolia_server)
                 .await;
-
             // Firebase returns the comment
             Mock::given(method("GET"))
                 .and(path("/item/1.json"))
@@ -901,11 +877,15 @@ mod tests {
                 })))
                 .mount(&firebase_server)
                 .await;
-
-            let client =
-                HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
-
+            let storage = test_storage();
             let story = make_story(999, vec![1]);
+            // Save story first so comments can reference it
+            storage
+                .save_story(&StorableStory::from(&story))
+                .await
+                .unwrap();
+            let client =
+                HnClient::with_api_urls(storage, &firebase_server.uri(), &algolia_server.uri());
             let fetched = client.fetch_comments_flat(&story, false).await.unwrap();
             let comments = fetched.comments;
             assert_eq!(comments.len(), 1);
@@ -919,7 +899,6 @@ mod tests {
         async fn test_uses_algolia_when_available() {
             let algolia_server = MockServer::start().await;
             let firebase_server = MockServer::start().await;
-
             // Algolia returns the comment tree
             Mock::given(method("GET"))
                 .and(path("/items/999"))
@@ -937,13 +916,15 @@ mod tests {
                 })))
                 .mount(&algolia_server)
                 .await;
-
             // Firebase should NOT be called (no mock needed, will fail if called)
-
-            let client =
-                HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
-
+            let storage = test_storage();
             let story = make_story(999, vec![1]);
+            storage
+                .save_story(&StorableStory::from(&story))
+                .await
+                .unwrap();
+            let client =
+                HnClient::with_api_urls(storage, &firebase_server.uri(), &algolia_server.uri());
             let fetched = client.fetch_comments_flat(&story, false).await.unwrap();
             let comments = fetched.comments;
             assert_eq!(comments.len(), 1);
@@ -957,14 +938,12 @@ mod tests {
         async fn test_firebase_fallback_handles_nested_comments() {
             let algolia_server = MockServer::start().await;
             let firebase_server = MockServer::start().await;
-
             // Algolia returns 500
             Mock::given(method("GET"))
                 .and(path("/items/999"))
                 .respond_with(ResponseTemplate::new(500))
                 .mount(&algolia_server)
                 .await;
-
             // Firebase returns nested comments
             Mock::given(method("GET"))
                 .and(path("/item/1.json"))
@@ -978,7 +957,6 @@ mod tests {
                 })))
                 .mount(&firebase_server)
                 .await;
-
             Mock::given(method("GET"))
                 .and(path("/item/2.json"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -991,11 +969,14 @@ mod tests {
                 })))
                 .mount(&firebase_server)
                 .await;
-
-            let client =
-                HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
-
+            let storage = test_storage();
             let story = make_story(999, vec![1]);
+            storage
+                .save_story(&StorableStory::from(&story))
+                .await
+                .unwrap();
+            let client =
+                HnClient::with_api_urls(storage, &firebase_server.uri(), &algolia_server.uri());
             let fetched = client.fetch_comments_flat(&story, false).await.unwrap();
             let comments = fetched.comments;
             assert_eq!(comments.len(), 2);

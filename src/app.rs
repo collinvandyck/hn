@@ -229,11 +229,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(
-        theme: ResolvedTheme,
-        config_dir: Option<PathBuf>,
-        storage: Option<Storage>,
-    ) -> Self {
+    pub fn new(theme: ResolvedTheme, config_dir: Option<PathBuf>, storage: Storage) -> Self {
         let (result_tx, result_rx) = mpsc::channel(10);
         let client = HnClient::new(storage);
         Self {
@@ -907,23 +903,30 @@ impl App {
     }
 
     fn spawn_mark_story_read(&self, id: u64) {
-        if let Some(storage) = self.client.storage() {
-            let storage = storage.clone();
-            tokio::spawn(async move {
-                let _ = storage.mark_story_read(id).await;
-            });
-        }
+        let storage = self.client.storage().clone();
+        tokio::spawn(async move {
+            let _ = storage.mark_story_read(id).await;
+        });
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::{Storage, StorageLocation};
     use crate::test_utils::{StoryBuilder, TestAppBuilder, sample_stories};
     use crate::theme::{ThemeVariant, default_for_variant};
 
+    fn test_storage() -> Storage {
+        Storage::open(StorageLocation::InMemory).unwrap()
+    }
+
     fn test_app() -> App {
-        App::new(default_for_variant(ThemeVariant::Dark), None, None)
+        App::new(
+            default_for_variant(ThemeVariant::Dark),
+            None,
+            test_storage(),
+        )
     }
 
     #[test]

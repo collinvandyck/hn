@@ -359,7 +359,7 @@ impl TestAppBuilder {
             load,
             should_quit: false,
             help_overlay: self.help_overlay,
-            client: HnClient::new(Some(Storage::open(StorageLocation::InMemory).unwrap())),
+            client: HnClient::new(Storage::open(StorageLocation::InMemory).unwrap()),
             scroll_offset: self.scroll_offset,
             theme: self.theme,
             clock: self.clock,

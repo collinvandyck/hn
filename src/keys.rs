@@ -192,8 +192,13 @@ pub fn handle_key(key: KeyEvent, app: &App) -> Option<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::{Storage, StorageLocation};
     use crate::theme::{ThemeVariant, default_for_variant};
     use crossterm::event::{KeyEventKind, KeyEventState};
+
+    fn test_storage() -> Storage {
+        Storage::open(StorageLocation::InMemory).unwrap()
+    }
 
     fn make_key(code: KeyCode) -> KeyEvent {
         KeyEvent {
@@ -214,7 +219,11 @@ mod tests {
     }
 
     fn test_app() -> App {
-        App::new(default_for_variant(ThemeVariant::Dark), None, None)
+        App::new(
+            default_for_variant(ThemeVariant::Dark),
+            None,
+            test_storage(),
+        )
     }
 
     fn comments_app() -> App {
