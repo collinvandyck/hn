@@ -141,7 +141,56 @@ pub struct ResolvedTheme {
     pub spinner: Color,
 }
 
+/// Dims a color by reducing its brightness.
+fn dim_color(color: Color) -> Color {
+    match color {
+        Color::Rgb(r, g, b) => {
+            // Reduce brightness by ~40%
+            Color::Rgb(
+                (r as f32 * 0.6) as u8,
+                (g as f32 * 0.6) as u8,
+                (b as f32 * 0.6) as u8,
+            )
+        }
+        // For indexed/named colors, we can't easily compute a dimmed version.
+        // Most themes use RGB hex colors, so this fallback is rarely hit.
+        other => other,
+    }
+}
+
 impl ResolvedTheme {
+    /// Returns a copy of this theme with all colors dimmed for read stories.
+    pub fn dimmed(&self) -> Self {
+        ResolvedTheme {
+            name: self.name.clone(),
+            variant: self.variant,
+            foreground: dim_color(self.foreground),
+            foreground_dim: dim_color(self.foreground_dim),
+            border: self.border,             // Keep border unchanged
+            selection_bg: self.selection_bg, // Keep selection unchanged
+            primary: dim_color(self.primary),
+            success: dim_color(self.success),
+            warning: dim_color(self.warning),
+            error: dim_color(self.error),
+            info: dim_color(self.info),
+            story_title: dim_color(self.story_title),
+            story_domain: dim_color(self.story_domain),
+            story_score: dim_color(self.story_score),
+            story_author: dim_color(self.story_author),
+            story_comments: dim_color(self.story_comments),
+            story_time: dim_color(self.story_time),
+            comment_text: dim_color(self.comment_text),
+            comment_depth_colors: self
+                .comment_depth_colors
+                .iter()
+                .map(|c| dim_color(*c))
+                .collect(),
+            status_bar_bg: self.status_bar_bg,
+            status_bar_fg: self.status_bar_fg,
+            spinner: self.spinner,
+        }
+    }
+
     pub fn depth_color(&self, depth: usize) -> Color {
         if self.comment_depth_colors.is_empty() {
             return self.primary;
@@ -185,6 +234,30 @@ impl ResolvedTheme {
 
     pub fn comment_text_style(&self) -> Style {
         Style::default().fg(self.comment_text)
+    }
+
+    pub fn story_title_style(&self) -> Style {
+        Style::default().fg(self.story_title)
+    }
+
+    pub fn story_domain_style(&self) -> Style {
+        Style::default().fg(self.story_domain)
+    }
+
+    pub fn story_score_style(&self) -> Style {
+        Style::default().fg(self.story_score)
+    }
+
+    pub fn story_author_style(&self) -> Style {
+        Style::default().fg(self.story_author)
+    }
+
+    pub fn story_comments_style(&self) -> Style {
+        Style::default().fg(self.story_comments)
+    }
+
+    pub fn story_time_style(&self) -> Style {
+        Style::default().fg(self.story_time)
     }
 }
 
