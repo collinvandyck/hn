@@ -816,6 +816,7 @@ impl App {
         let tx = self.result_tx.clone();
         let generation = self.generation;
         let task_id = self.debug.start_task("Load favorites");
+
         tokio::spawn(async move {
             let ids = match storage.get_favorite_story_ids().await {
                 Ok(ids) => ids,
