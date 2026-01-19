@@ -791,6 +791,7 @@ impl App {
         self.stories_fetched_at = None;
         self.load.current_page = 0;
         self.load.has_more = true;
+        self.load.loading_more = false;
         self.spawn_stories_fetch(0, false, false);
     }
 
@@ -1150,5 +1151,16 @@ mod tests {
         assert!(app.comments_fetched_at.is_some());
         app.update(Message::Refresh);
         assert!(app.comments_fetched_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn load_stories_resets_loading_more() {
+        let mut app = TestAppBuilder::new()
+            .with_stories(sample_stories())
+            .loading_more(true)
+            .build();
+        assert!(app.load.loading_more);
+        app.load_stories();
+        assert!(!app.load.loading_more);
     }
 }
