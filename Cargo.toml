@@ -33,6 +33,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
 
 [profile.dev]
+opt-level = 1
+
+[profile.test]
+opt-level = 0
 
 [profile.dev.package."*"]
 opt-level = 2
