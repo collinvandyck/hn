@@ -4,7 +4,6 @@ expression: output
 ---
 
 
-
                           ┌Help──────────────────────┐
                           │                          │
                           │ j/k  navigate            │
@@ -15,6 +14,8 @@ expression: output
                           │   O  open story link     │
                           │   y  copy url            │
                           │   Y  copy story url      │
+                          │   f  favorite comment    │
+                          │   F  favorite story      │
                           │ Esc  back to stories     │
                           │   r  refresh             │
                           │   t  themes              │

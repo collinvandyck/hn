@@ -125,6 +125,7 @@ impl Comment {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Feed {
+    Favorites,
     #[default]
     Top,
     New,
@@ -135,19 +136,21 @@ pub enum Feed {
 }
 
 impl Feed {
-    pub fn endpoint(&self) -> &'static str {
+    pub fn endpoint(&self) -> Option<&'static str> {
         match self {
-            Feed::Top => "topstories",
-            Feed::New => "newstories",
-            Feed::Best => "beststories",
-            Feed::Ask => "askstories",
-            Feed::Show => "showstories",
-            Feed::Jobs => "jobstories",
+            Feed::Favorites => None,
+            Feed::Top => Some("topstories"),
+            Feed::New => Some("newstories"),
+            Feed::Best => Some("beststories"),
+            Feed::Ask => Some("askstories"),
+            Feed::Show => Some("showstories"),
+            Feed::Jobs => Some("jobstories"),
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
+            Feed::Favorites => "Favs",
             Feed::Top => "Top",
             Feed::New => "New",
             Feed::Best => "Best",
@@ -159,6 +162,7 @@ impl Feed {
 
     pub fn all() -> &'static [Feed] {
         &[
+            Feed::Favorites,
             Feed::Top,
             Feed::New,
             Feed::Best,
@@ -225,20 +229,22 @@ mod tests {
 
     #[test]
     fn test_feed_endpoints() {
-        assert_eq!(Feed::Top.endpoint(), "topstories");
-        assert_eq!(Feed::Ask.endpoint(), "askstories");
+        assert_eq!(Feed::Favorites.endpoint(), None);
+        assert_eq!(Feed::Top.endpoint(), Some("topstories"));
+        assert_eq!(Feed::Ask.endpoint(), Some("askstories"));
     }
 
     #[test]
     fn test_feed_cycling() {
         let feeds = Feed::all();
-        assert_eq!(feeds[0], Feed::Top);
+        assert_eq!(feeds[0], Feed::Favorites);
+        assert_eq!(feeds[1], Feed::Top);
         assert_eq!(feeds[feeds.len() - 1], Feed::Jobs);
 
         // Test wraparound math (same logic as cycle_feed)
         let wrap = |idx: i32, len: i32| idx.rem_euclid(len) as usize;
-        assert_eq!(wrap(-1, 6), 5); // Before first -> last
-        assert_eq!(wrap(6, 6), 0); // After last -> first
+        assert_eq!(wrap(-1, 7), 6); // Before first -> last
+        assert_eq!(wrap(7, 7), 0); // After last -> first
     }
 
     #[test]

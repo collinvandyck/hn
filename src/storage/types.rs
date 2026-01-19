@@ -3,6 +3,21 @@ use std::time::Duration;
 use crate::api::{Comment, Feed, Story};
 use crate::time::now_unix;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FavoriteType {
+    Story,
+    Comment,
+}
+
+impl FavoriteType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FavoriteType::Story => "story",
+            FavoriteType::Comment => "comment",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StorableStory {
     pub id: u64,

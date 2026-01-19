@@ -25,6 +25,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 4,
         sql: include_str!("sql/004_feeds_age_view.sql"),
     },
+    Migration {
+        version: 5,
+        sql: include_str!("sql/005_favorites.sql"),
+    },
 ];
 
 pub fn run_migrations(conn: &Connection) -> Result<(), StorageError> {

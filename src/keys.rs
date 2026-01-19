@@ -140,8 +140,10 @@ pub fn stories_keymap() -> Keymap {
     navigation_keymap()
         .bind(KeyCode::Char('l'), Message::OpenComments)
         .bind(KeyCode::Enter, Message::OpenComments)
+        .bind(KeyCode::Char('f'), Message::ToggleFavorite)
         .bind(KeyCode::Char('H'), Message::PrevFeed)
         .bind(KeyCode::Char('L'), Message::NextFeed)
+        .bind(KeyCode::Char('0'), Message::SwitchFeed(Feed::Favorites))
         .bind(KeyCode::Char('1'), Message::SwitchFeed(Feed::Top))
         .bind(KeyCode::Char('2'), Message::SwitchFeed(Feed::New))
         .bind(KeyCode::Char('3'), Message::SwitchFeed(Feed::Best))
@@ -161,6 +163,8 @@ pub fn comments_keymap() -> Keymap {
         .bind(KeyCode::Char('='), Message::ExpandThread)
         .bind(KeyCode::Char('-'), Message::CollapseThread)
         .bind(KeyCode::Char('_'), Message::CollapseThread)
+        .bind(KeyCode::Char('f'), Message::ToggleFavorite)
+        .bind(KeyCode::Char('F'), Message::ToggleStoryFavorite)
         .bind(KeyCode::Char('O'), Message::OpenStoryUrl)
         .bind(KeyCode::Char('Y'), Message::CopyStoryUrl)
         .bind(KeyCode::Esc, Message::Back)
@@ -301,6 +305,10 @@ mod tests {
     #[test]
     fn test_feed_switch_keys() {
         let app = test_app();
+        assert!(matches!(
+            handle_key(make_key(KeyCode::Char('0')), &app),
+            Some(Message::SwitchFeed(Feed::Favorites))
+        ));
         assert!(matches!(
             handle_key(make_key(KeyCode::Char('1')), &app),
             Some(Message::SwitchFeed(Feed::Top))

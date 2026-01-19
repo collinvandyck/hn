@@ -4,7 +4,7 @@ use crate::api::Feed;
 use crate::time::now_unix;
 
 use super::StorageError;
-use super::types::{CachedFeed, StorableComment, StorableStory};
+use super::types::{CachedFeed, FavoriteType, StorableComment, StorableStory};
 
 fn kids_to_json(kids: &[u64]) -> String {
     serde_json::to_string(kids).unwrap_or_else(|_| "[]".to_string())
@@ -174,6 +174,7 @@ pub fn get_comments(
 
 fn feed_type_str(feed: Feed) -> &'static str {
     match feed {
+        Feed::Favorites => "favorites",
         Feed::Top => "top",
         Feed::New => "new",
         Feed::Best => "best",
@@ -185,6 +186,7 @@ fn feed_type_str(feed: Feed) -> &'static str {
 
 fn str_to_feed(s: &str) -> Feed {
     match s {
+        "favorites" => Feed::Favorites,
         "top" => Feed::Top,
         "new" => Feed::New,
         "best" => Feed::Best,
@@ -261,4 +263,42 @@ pub fn mark_story_read(conn: &Connection, id: u64) -> Result<(), StorageError> {
         params![now_unix() as i64, id as i64],
     )?;
     Ok(())
+}
+
+/// Toggle favorite status for an item. Returns true if now favorited, false if unfavorited.
+pub fn toggle_favorite(
+    conn: &Connection,
+    item_id: u64,
+    favorite_type: FavoriteType,
+) -> Result<bool, StorageError> {
+    let type_str = favorite_type.as_str();
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM favorites WHERE item_id = ?1 AND item_type = ?2",
+            params![item_id as i64, type_str],
+            |row| row.get(0),
+        )
+        .ok();
+    if existing.is_some() {
+        conn.execute(
+            "DELETE FROM favorites WHERE item_id = ?1 AND item_type = ?2",
+            params![item_id as i64, type_str],
+        )?;
+        Ok(false)
+    } else {
+        conn.execute(
+            "INSERT INTO favorites (item_id, item_type, favorited_at) VALUES (?1, ?2, ?3)",
+            params![item_id as i64, type_str, now_unix() as i64],
+        )?;
+        Ok(true)
+    }
+}
+
+/// Get all favorited story IDs, ordered by most recently favorited first.
+pub fn get_favorite_story_ids(conn: &Connection) -> Result<Vec<u64>, StorageError> {
+    let mut stmt = conn.prepare(
+        "SELECT item_id FROM favorites WHERE item_type = 'story' ORDER BY favorited_at DESC",
+    )?;
+    let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
+    Ok(rows.filter_map(|r| r.ok()).map(|id| id as u64).collect())
 }

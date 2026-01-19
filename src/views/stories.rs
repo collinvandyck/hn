@@ -44,7 +44,7 @@ fn render_feed_tabs(frame: &mut Frame, app: &App, area: Rect) {
                 theme.dim_style()
             };
             vec![
-                Span::styled(format!("[{}]", i + 1), theme.dim_style()),
+                Span::styled(format!("[{}]", i), theme.dim_style()),
                 Span::styled(feed.label(), style),
                 Span::raw("  "),
             ]
@@ -80,7 +80,10 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app
         .stories
         .iter()
-        .map(|story| story_to_list_item(story, theme, &app.clock))
+        .map(|story| {
+            let is_favorite = app.favorited_story_ids.contains(&story.id);
+            story_to_list_item(story, theme, &app.clock, is_favorite)
+        })
         .collect();
 
     let list = List::new(items)
@@ -101,16 +104,25 @@ fn story_to_list_item(
     story: &Story,
     theme: &ResolvedTheme,
     clock: &Arc<dyn Clock>,
+    is_favorite: bool,
 ) -> ListItem<'static> {
     let theme = if story.is_read() {
         theme.dimmed()
     } else {
         theme.clone()
     };
-    let title_line = Line::from(vec![
-        Span::styled(story.title.clone(), theme.story_title_style()),
-        Span::styled(format!(" ({})", story.domain()), theme.story_domain_style()),
-    ]);
+    let mut title_spans = vec![Span::styled(story.title.clone(), theme.story_title_style())];
+    if is_favorite {
+        title_spans.push(Span::styled(
+            " \u{2728}",
+            ratatui::style::Style::default().fg(theme.warning),
+        ));
+    }
+    title_spans.push(Span::styled(
+        format!(" ({})", story.domain()),
+        theme.story_domain_style(),
+    ));
+    let title_line = Line::from(title_spans);
     let meta_line = Line::from(vec![
         Span::styled(format!("▲ {}", story.score), theme.story_score_style()),
         Span::styled(" | ", theme.dim_style()),

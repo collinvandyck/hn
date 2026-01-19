@@ -1,5 +1,6 @@
 //! Test data builders for view testing.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -209,6 +210,8 @@ pub struct TestAppBuilder {
     config_dir: Option<PathBuf>,
     stories_fetched_at: Option<u64>,
     comments_fetched_at: Option<u64>,
+    favorited_story_ids: HashSet<u64>,
+    favorited_comment_ids: HashSet<u64>,
 }
 
 impl Default for TestAppBuilder {
@@ -241,7 +244,19 @@ impl TestAppBuilder {
             config_dir: None,
             stories_fetched_at: None,
             comments_fetched_at: None,
+            favorited_story_ids: HashSet::new(),
+            favorited_comment_ids: HashSet::new(),
         }
+    }
+
+    pub fn with_favorited_stories(mut self, ids: Vec<u64>) -> Self {
+        self.favorited_story_ids = ids.into_iter().collect();
+        self
+    }
+
+    pub fn with_favorited_comments(mut self, ids: Vec<u64>) -> Self {
+        self.favorited_comment_ids = ids.into_iter().collect();
+        self
     }
 
     pub fn config_dir(mut self, path: PathBuf) -> Self {
@@ -373,6 +388,8 @@ impl TestAppBuilder {
             flash_message: None,
             stories_fetched_at: self.stories_fetched_at,
             comments_fetched_at: self.comments_fetched_at,
+            favorited_story_ids: self.favorited_story_ids,
+            favorited_comment_ids: self.favorited_comment_ids,
         }
     }
 }

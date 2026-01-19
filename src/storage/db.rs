@@ -40,6 +40,18 @@ pub fn run_worker(conn: Connection, mut cmd_rx: mpsc::Receiver<StorageCommand>) 
                 let result = queries::mark_story_read(&conn, id);
                 let _ = reply.send(result);
             }
+            StorageCommand::ToggleFavorite {
+                item_id,
+                favorite_type,
+                reply,
+            } => {
+                let result = queries::toggle_favorite(&conn, item_id, favorite_type);
+                let _ = reply.send(result);
+            }
+            StorageCommand::GetFavoriteStoryIds { reply } => {
+                let result = queries::get_favorite_story_ids(&conn);
+                let _ = reply.send(result);
+            }
         }
     }
 }

@@ -78,7 +78,10 @@ impl HnClient {
     }
 
     pub async fn fetch_feed_ids(&self, feed: Feed) -> Result<Vec<u64>, ApiError> {
-        let url = format!("{}/{}.json", self.firebase_api, feed.endpoint());
+        let endpoint = feed
+            .endpoint()
+            .expect("fetch_feed_ids called on feed without API endpoint");
+        let url = format!("{}/{}.json", self.firebase_api, endpoint);
         self.get_json(&url).await
     }
 

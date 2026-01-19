@@ -16,4 +16,4 @@ Partial Render Test
 │      should be partially visible at the bottom of the viewport instead of    │
 │      being skipped entirely causing blank space                              │
 └──────────────────────────────────────────────────────────────────────────────┘
- Comments  1/3 | l/h:expand  L/H:subtree  +/-:thread  Esc:back  ?:help
+ Comments  1/3 | l/h:expand  L/H:subtree  +/-:thread  f:fav  Esc:back  ?:help

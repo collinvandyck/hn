@@ -14,6 +14,7 @@ expression: output
                             │   l  open comments   │
                             │   o  open link       │
                             │   y  copy url        │
+                            │   f  favorite        │
                             │   r  refresh         │
                             │   t  themes          │
                             │   `  debug           │

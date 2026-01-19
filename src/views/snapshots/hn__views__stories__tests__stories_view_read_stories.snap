@@ -2,7 +2,7 @@
 source: src/views/stories.rs
 expression: output
 ---
-[1]Top  [2]New  [3]Best  [4]Ask  [5]Show  [6]Jobs
+[0]Favs  [1]Top  [2]New  [3]Best  [4]Ask  [5]Show  [6]Jobs
 ────────────────────────────────────────────────────────────────────────────────
   Read Story One (example.com)
   ▲ 100 | testuser | 10 comments | 1d ago
@@ -25,4 +25,4 @@ expression: output
 
 
 ────────────────────────────────────────────────────────────────────────────────
- Top  2/3 | H/L:feeds  ?:help  q:quit
+ Top  2/3 | H/L:feeds  f:fav  ?:help  q:quit

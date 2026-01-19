@@ -2,7 +2,7 @@
 source: src/views/stories.rs
 expression: output
 ---
-[1]Top  [2]New  [3]Best  [4]Ask  [5]Show  [6]Jobs                  loaded 2m ago
+[0]Favs  [1]Top  [2]New  [3]Best  [4]Ask  [5]Show  [6]Jobs         loaded 2m ago
 ────────────────────────────────────────────────────────────────────────────────
 ▶ Show HN: I built a terminal UI for Hacker News (github.com)
   ▲ 142 | dang | 47 comments | 1d ago
@@ -25,4 +25,4 @@ expression: output
 
 
 ────────────────────────────────────────────────────────────────────────────────
- Top  1/5 | H/L:feeds  ?:help  q:quit
+ Top  1/5 | H/L:feeds  f:fav  ?:help  q:quit

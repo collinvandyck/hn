@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use crate::api::{ApiError, Comment, Feed, HnClient, Story};
 use crate::comment_tree::CommentTree;
 use crate::settings::{self, Settings};
+use crate::storage::FavoriteType;
 use crate::storage::Storage;
 use crate::theme::{ResolvedTheme, Theme, all_themes};
 use crate::time::{Clock, now_unix};
@@ -194,6 +195,9 @@ pub enum Message {
     // Clipboard
     CopyUrl,
     CopyStoryUrl,
+    // Favorites
+    ToggleFavorite,
+    ToggleStoryFavorite,
 }
 
 pub struct App {
@@ -226,6 +230,9 @@ pub struct App {
     // Timestamps for when data was last fetched
     pub stories_fetched_at: Option<u64>,
     pub comments_fetched_at: Option<u64>,
+    // Favorite IDs (optimistic state, synced with DB)
+    pub favorited_story_ids: HashSet<u64>,
+    pub favorited_comment_ids: HashSet<u64>,
 }
 
 impl App {
@@ -255,6 +262,8 @@ impl App {
             flash_message: None,
             stories_fetched_at: None,
             comments_fetched_at: None,
+            favorited_story_ids: HashSet::new(),
+            favorited_comment_ids: HashSet::new(),
         }
     }
 
@@ -423,6 +432,8 @@ impl App {
             Message::ThemePickerDown => self.theme_picker_down(),
             Message::CopyUrl => self.copy_url(),
             Message::CopyStoryUrl => self.copy_story_url(),
+            Message::ToggleFavorite => self.toggle_favorite(),
+            Message::ToggleStoryFavorite => self.toggle_story_favorite(),
         }
     }
 
@@ -790,9 +801,57 @@ impl App {
         self.stories.clear();
         self.stories_fetched_at = None;
         self.load.current_page = 0;
-        self.load.has_more = true;
+        self.load.has_more = self.feed != Feed::Favorites; // Favorites don't paginate
         self.load.loading_more = false;
-        self.spawn_stories_fetch(0, false, false);
+        if self.feed == Feed::Favorites {
+            self.spawn_favorites_fetch();
+        } else {
+            self.spawn_stories_fetch(0, false, false);
+        }
+    }
+
+    fn spawn_favorites_fetch(&mut self) {
+        let storage = self.client.storage().clone();
+        let client = self.client.clone();
+        let tx = self.result_tx.clone();
+        let generation = self.generation;
+        let task_id = self.debug.start_task("Load favorites");
+        tokio::spawn(async move {
+            let ids = match storage.get_favorite_story_ids().await {
+                Ok(ids) => ids,
+                Err(e) => {
+                    let _ = tx
+                        .send(AsyncResult::Stories(StoriesResult {
+                            generation,
+                            task_id,
+                            result: Err(e.into()),
+                            fetched_at: None,
+                        }))
+                        .await;
+                    return;
+                }
+            };
+            if ids.is_empty() {
+                let _ = tx
+                    .send(AsyncResult::Stories(StoriesResult {
+                        generation,
+                        task_id,
+                        result: Ok(vec![]),
+                        fetched_at: None,
+                    }))
+                    .await;
+                return;
+            }
+            let result = client.fetch_stories_by_ids(&ids, false).await;
+            let _ = tx
+                .send(AsyncResult::Stories(StoriesResult {
+                    generation,
+                    task_id,
+                    result,
+                    fetched_at: None,
+                }))
+                .await;
+        });
     }
 
     fn should_load_more(&self) -> bool {
@@ -907,6 +966,48 @@ impl App {
         let storage = self.client.storage().clone();
         tokio::spawn(async move {
             let _ = storage.mark_story_read(id).await;
+        });
+    }
+
+    fn toggle_favorite(&mut self) {
+        match &self.view {
+            View::Stories => {
+                if let Some(story) = self.stories.get(self.selected_index) {
+                    let id = story.id;
+                    self.spawn_toggle_favorite(id, FavoriteType::Story);
+                }
+            }
+            View::Comments { .. } => {
+                if let Some(comment) = self.selected_comment() {
+                    let id = comment.id;
+                    self.spawn_toggle_favorite(id, FavoriteType::Comment);
+                }
+            }
+        }
+    }
+
+    fn toggle_story_favorite(&mut self) {
+        if let View::Comments { story_id, .. } = &self.view {
+            self.spawn_toggle_favorite(*story_id, FavoriteType::Story);
+        }
+    }
+
+    fn spawn_toggle_favorite(&mut self, item_id: u64, favorite_type: FavoriteType) {
+        let set = match favorite_type {
+            FavoriteType::Story => &mut self.favorited_story_ids,
+            FavoriteType::Comment => &mut self.favorited_comment_ids,
+        };
+        let was_favorite = set.contains(&item_id);
+        if was_favorite {
+            set.remove(&item_id);
+            self.flash("unfavorited");
+        } else {
+            set.insert(item_id);
+            self.flash("favorited \u{2728}");
+        }
+        let storage = self.client.storage().clone();
+        tokio::spawn(async move {
+            let _ = storage.toggle_favorite(item_id, favorite_type).await;
         });
     }
 }

@@ -10,7 +10,7 @@ use std::time::Duration;
 use rusqlite::Connection;
 use tokio::sync::{mpsc, oneshot};
 
-pub use types::{CachedFeed, StorableComment, StorableStory};
+pub use types::{CachedFeed, FavoriteType, StorableComment, StorableStory};
 
 use crate::api::Feed;
 
@@ -102,6 +102,14 @@ pub(crate) enum StorageCommand {
     MarkStoryRead {
         id: u64,
         reply: oneshot::Sender<Result<(), StorageError>>,
+    },
+    ToggleFavorite {
+        item_id: u64,
+        favorite_type: FavoriteType,
+        reply: oneshot::Sender<Result<bool, StorageError>>,
+    },
+    GetFavoriteStoryIds {
+        reply: oneshot::Sender<Result<Vec<u64>, StorageError>>,
     },
 }
 
@@ -233,6 +241,30 @@ impl Storage {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(StorageCommand::MarkStoryRead { id, reply: tx })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn toggle_favorite(
+        &self,
+        item_id: u64,
+        favorite_type: FavoriteType,
+    ) -> Result<bool, StorageError> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(StorageCommand::ToggleFavorite {
+                item_id,
+                favorite_type,
+                reply: tx,
+            })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn get_favorite_story_ids(&self) -> Result<Vec<u64>, StorageError> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(StorageCommand::GetFavoriteStoryIds { reply: tx })
             .await?;
         rx.await?
     }
