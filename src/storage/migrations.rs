@@ -21,6 +21,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 3,
         sql: include_str!("sql/003_feeds_synthetic_id.sql"),
     },
+    Migration {
+        version: 4,
+        sql: include_str!("sql/004_feeds_age_view.sql"),
+    },
 ];
 
 pub fn run_migrations(conn: &Connection) -> Result<(), StorageError> {
