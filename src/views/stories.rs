@@ -109,45 +109,35 @@ fn story_to_list_item(
     clock: &Arc<dyn Clock>,
     is_read: bool,
 ) -> ListItem<'static> {
-    let title_style = if is_read {
-        Style::default()
-            .fg(theme.story_title)
-            .add_modifier(Modifier::DIM)
-    } else {
-        Style::default().fg(theme.story_title)
+    let style = |color| {
+        let base = Style::default().fg(color);
+        if is_read {
+            base.add_modifier(Modifier::DIM)
+        } else {
+            base
+        }
     };
     let title_line = Line::from(vec![
-        Span::styled(
-            format!("{:>3}. ", rank),
-            Style::default().fg(theme.foreground_dim),
-        ),
-        Span::styled(story.title.clone(), title_style),
-        Span::styled(
-            format!(" ({})", story.domain()),
-            Style::default().fg(theme.story_domain),
-        ),
+        Span::styled(format!("{:>3}. ", rank), style(theme.foreground_dim)),
+        Span::styled(story.title.clone(), style(theme.story_title)),
+        Span::styled(format!(" ({})", story.domain()), style(theme.story_domain)),
     ]);
-
     let meta_line = Line::from(vec![
-        Span::raw("     "),
-        Span::styled(
-            format!("▲ {}", story.score),
-            Style::default().fg(theme.story_score),
-        ),
-        Span::raw(" | "),
-        Span::styled(story.by.clone(), Style::default().fg(theme.story_author)),
-        Span::raw(" | "),
+        Span::styled("     ", style(theme.foreground_dim)),
+        Span::styled(format!("▲ {}", story.score), style(theme.story_score)),
+        Span::styled(" | ", style(theme.foreground_dim)),
+        Span::styled(story.by.clone(), style(theme.story_author)),
+        Span::styled(" | ", style(theme.foreground_dim)),
         Span::styled(
             format!("{} comments", story.descendants),
-            Style::default().fg(theme.story_comments),
+            style(theme.story_comments),
         ),
-        Span::raw(" | "),
+        Span::styled(" | ", style(theme.foreground_dim)),
         Span::styled(
             format_relative(story.time, clock.now()),
-            Style::default().fg(theme.story_time),
+            style(theme.story_time),
         ),
     ]);
-
     ListItem::new(vec![title_line, meta_line])
 }
 
