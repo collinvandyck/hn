@@ -4,7 +4,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState},
 };
 
 use crate::api::{Feed, Story};
@@ -14,7 +14,7 @@ use crate::keys::{global_keymap, stories_keymap};
 
 use crate::theme::ResolvedTheme;
 use crate::time::{Clock, format_relative};
-use crate::views::common::render_error;
+use crate::views::common::{render_error, render_with_timestamp};
 use crate::views::status_bar::StatusBar;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
@@ -59,7 +59,14 @@ fn render_feed_tabs(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     let tabs_line = Line::from(spans);
-    frame.render_widget(Paragraph::new(tabs_line), area);
+    render_with_timestamp(
+        frame,
+        tabs_line,
+        app.stories_fetched_at,
+        app.clock.now(),
+        theme,
+        area,
+    );
 }
 
 fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {

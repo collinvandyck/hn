@@ -6,6 +6,7 @@ use tracing::{debug, info, instrument, warn};
 use super::error::ApiError;
 use super::types::{AlgoliaItem, Comment, Feed, HnItem, Story};
 use crate::storage::{StorableComment, StorableStory, Storage};
+use crate::time::now_unix;
 
 const DEFAULT_FIREBASE_API: &str = "https://hacker-news.firebaseio.com/v0";
 const DEFAULT_ALGOLIA_API: &str = "https://hn.algolia.com/api/v1";
@@ -86,29 +87,30 @@ impl HnClient {
         feed: Feed,
         page: usize,
         force_refresh: bool,
-    ) -> Result<Vec<Story>, ApiError> {
+    ) -> Result<(Vec<Story>, Option<u64>), ApiError> {
         info!("fetching stories");
         let ids = self.fetch_feed_ids(feed).await?;
         let start = page * PAGE_SIZE;
         let end = (start + PAGE_SIZE).min(ids.len());
 
         if start >= ids.len() {
-            return Ok(vec![]);
+            return Ok((vec![], None));
         }
 
         let page_ids = &ids[start..end];
-        let stories = self.fetch_stories_by_ids(page_ids, force_refresh).await?;
+        let (stories, fetched_at) = self.fetch_stories_by_ids(page_ids, force_refresh).await?;
         info!(count = stories.len(), "fetched stories");
-        Ok(stories)
+        Ok((stories, fetched_at))
     }
 
     pub async fn fetch_stories_by_ids(
         &self,
         ids: &[u64],
         force_refresh: bool,
-    ) -> Result<Vec<Story>, ApiError> {
+    ) -> Result<(Vec<Story>, Option<u64>), ApiError> {
         let mut stories = Vec::with_capacity(ids.len());
         let mut to_fetch = Vec::new();
+        let mut oldest_fetched_at: Option<u64> = None;
 
         // Check storage for cached stories (unless forcing refresh)
         if !force_refresh {
@@ -116,6 +118,11 @@ impl HnClient {
                 for &id in ids {
                     if let Ok(Some(cached)) = storage.get_fresh_story(id).await {
                         debug!(story_id = id, "cache hit");
+                        oldest_fetched_at = Some(
+                            oldest_fetched_at
+                                .map(|old| old.min(cached.fetched_at))
+                                .unwrap_or(cached.fetched_at),
+                        );
                         stories.push(cached.into());
                     } else {
                         debug!(story_id = id, "cache miss");
@@ -131,6 +138,7 @@ impl HnClient {
 
         // Fetch remaining from API
         if !to_fetch.is_empty() {
+            let fetch_time = now_unix();
             let futures: Vec<_> = to_fetch.iter().map(|&id| self.fetch_item(id)).collect();
             let results = futures::future::join_all(futures).await;
 
@@ -149,6 +157,11 @@ impl HnClient {
             } else {
                 stories.extend(fetched);
             }
+            oldest_fetched_at = Some(
+                oldest_fetched_at
+                    .map(|old| old.min(fetch_time))
+                    .unwrap_or(fetch_time),
+            );
         }
 
         // Re-sort by original id order
@@ -156,7 +169,7 @@ impl HnClient {
             ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
         stories.sort_by_key(|s| id_positions.get(&s.id).copied().unwrap_or(usize::MAX));
 
-        Ok(stories)
+        Ok((stories, oldest_fetched_at))
     }
 
     /// Fetches comments for a story, trying Algolia first then falling back to Firebase.
@@ -165,7 +178,7 @@ impl HnClient {
         &self,
         story: &Story,
         force_refresh: bool,
-    ) -> Result<Vec<Comment>, ApiError> {
+    ) -> Result<(Vec<Comment>, Option<u64>), ApiError> {
         info!("fetching comments");
 
         // Check storage for cached comments (unless forcing refresh)
@@ -174,9 +187,12 @@ impl HnClient {
             && let Ok(Some(cached)) = storage.get_fresh_comments(story.id).await
         {
             info!(count = cached.len(), source = "cache", "loaded comments");
+            let fetched_at = cached.first().map(|c| c.fetched_at);
             let comments: Vec<Comment> = cached.into_iter().map(|c| c.into()).collect();
-            return Ok(order_cached_comments(comments, &story.kids));
+            return Ok((order_cached_comments(comments, &story.kids), fetched_at));
         }
+
+        let fetch_time = now_unix();
 
         // Try Algolia first (single request for all comments)
         match self.fetch_comments_algolia(story.id).await {
@@ -187,7 +203,7 @@ impl HnClient {
                     source = "algolia",
                     "fetched comments"
                 );
-                return Ok(comments);
+                return Ok((comments, Some(fetch_time)));
             }
             Err(e) => {
                 warn!(source = "algolia", error = %e, "fetch failed, falling back to Firebase");
@@ -202,7 +218,7 @@ impl HnClient {
             source = "firebase",
             "fetched comments"
         );
-        Ok(comments)
+        Ok((comments, Some(fetch_time)))
     }
 
     /// Fetches all comments via Algolia's single-request endpoint.
@@ -853,7 +869,7 @@ mod tests {
                 HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
 
             let story = make_story(999, vec![1]);
-            let comments = client.fetch_comments_flat(&story, false).await.unwrap();
+            let (comments, _fetched_at) = client.fetch_comments_flat(&story, false).await.unwrap();
 
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].id, 1);
@@ -891,7 +907,7 @@ mod tests {
                 HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
 
             let story = make_story(999, vec![1]);
-            let comments = client.fetch_comments_flat(&story, false).await.unwrap();
+            let (comments, _fetched_at) = client.fetch_comments_flat(&story, false).await.unwrap();
 
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].id, 1);
@@ -943,7 +959,7 @@ mod tests {
                 HnClient::with_api_urls(None, &firebase_server.uri(), &algolia_server.uri());
 
             let story = make_story(999, vec![1]);
-            let comments = client.fetch_comments_flat(&story, false).await.unwrap();
+            let (comments, _fetched_at) = client.fetch_comments_flat(&story, false).await.unwrap();
 
             assert_eq!(comments.len(), 2);
             assert_eq!(comments[0].id, 1);

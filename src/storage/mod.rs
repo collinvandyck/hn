@@ -14,7 +14,7 @@ pub use types::{CachedFeed, StorableComment, StorableStory};
 
 use crate::api::Feed;
 
-const CACHE_TTL: Duration = Duration::from_secs(60);
+const CACHE_TTL: Duration = Duration::from_secs(86400); // 24 hours
 
 pub enum StorageLocation {
     Path(PathBuf),
@@ -286,7 +286,7 @@ mod tests {
             time: 1700000000,
             descendants: 10,
             kids: vec![],
-            fetched_at: now_unix() - 120, // 2 minutes ago
+            fetched_at: now_unix() - 90_000, // 25 hours ago (exceeds 24h TTL)
             read_at: None,
         };
 

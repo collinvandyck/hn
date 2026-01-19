@@ -12,22 +12,24 @@ use crate::storage::Storage;
 use crate::theme::{ResolvedTheme, Theme, all_themes};
 use crate::time::{Clock, now_unix};
 
+pub struct StoriesResult {
+    pub generation: u64,
+    pub task_id: u64,
+    pub result: Result<Vec<Story>, ApiError>,
+    pub fetched_at: Option<u64>,
+}
+
+pub struct CommentsResult {
+    pub story_id: u64,
+    pub task_id: u64,
+    pub result: Result<Vec<Comment>, ApiError>,
+    pub fetched_at: Option<u64>,
+}
+
 pub enum AsyncResult {
-    Stories {
-        generation: u64,
-        task_id: u64,
-        result: Result<Vec<Story>, ApiError>,
-    },
-    MoreStories {
-        generation: u64,
-        task_id: u64,
-        result: Result<Vec<Story>, ApiError>,
-    },
-    Comments {
-        story_id: u64,
-        task_id: u64,
-        result: Result<Vec<Comment>, ApiError>,
-    },
+    Stories(StoriesResult),
+    MoreStories(StoriesResult),
+    Comments(CommentsResult),
 }
 
 #[derive(Debug)]
@@ -221,6 +223,9 @@ pub struct App {
     pub config_dir: Option<PathBuf>,
     // Flash message for clipboard feedback
     pub flash_message: Option<(String, Instant)>,
+    // Timestamps for when data was last fetched
+    pub stories_fetched_at: Option<u64>,
+    pub comments_fetched_at: Option<u64>,
 }
 
 impl App {
@@ -252,117 +257,122 @@ impl App {
             theme_picker: None,
             config_dir,
             flash_message: None,
+            stories_fetched_at: None,
+            comments_fetched_at: None,
         }
     }
 
     pub fn handle_async_result(&mut self, result: AsyncResult) {
         match result {
-            AsyncResult::Stories {
-                generation,
-                task_id,
-                result,
-            } => {
-                if generation != self.generation {
-                    self.debug.end_task(task_id, "discarded (stale)");
-                    return;
-                }
-                self.debug.end_task(
-                    task_id,
-                    if result.is_ok() {
-                        "completed"
-                    } else {
-                        "failed"
-                    },
-                );
-                match result {
-                    Ok(stories) => {
-                        self.stories = stories;
-                        self.load.set_loading(false);
-                        self.selected_index = 0;
-                        self.scroll_offset = 0;
-                        if self.should_fill_viewport() {
-                            self.load_more();
-                        }
-                    }
-                    Err(e) => {
-                        self.load.set_error(e.user_message());
-                        self.load.set_loading(false);
-                        if e.is_fatal() {
-                            self.should_quit = true;
-                        }
-                    }
+            AsyncResult::Stories(r) => self.handle_stories_result(r),
+            AsyncResult::MoreStories(r) => self.handle_more_stories_result(r),
+            AsyncResult::Comments(r) => self.handle_comments_result(r),
+        }
+    }
+
+    fn handle_stories_result(&mut self, r: StoriesResult) {
+        if r.generation != self.generation {
+            self.debug.end_task(r.task_id, "discarded (stale)");
+            return;
+        }
+        self.debug.end_task(
+            r.task_id,
+            if r.result.is_ok() {
+                "completed"
+            } else {
+                "failed"
+            },
+        );
+        match r.result {
+            Ok(stories) => {
+                self.stories = stories;
+                self.stories_fetched_at = r.fetched_at;
+                self.load.set_loading(false);
+                self.selected_index = 0;
+                self.scroll_offset = 0;
+                if self.should_fill_viewport() {
+                    self.load_more();
                 }
             }
-            AsyncResult::MoreStories {
-                generation,
-                task_id,
-                result,
-            } => {
-                if generation != self.generation {
-                    self.debug.end_task(task_id, "discarded (stale)");
-                    return;
-                }
-                self.debug.end_task(
-                    task_id,
-                    if result.is_ok() {
-                        "completed"
-                    } else {
-                        "failed"
-                    },
-                );
-                match result {
-                    Ok(stories) => {
-                        if stories.is_empty() {
-                            self.load.has_more = false;
-                        } else {
-                            self.stories.extend(stories);
-                            self.load.current_page += 1;
-                        }
-                        self.load.loading_more = false;
-                        if self.should_fill_viewport() {
-                            self.load_more();
-                        }
-                    }
-                    Err(e) => {
-                        self.load.set_error(e.user_message());
-                        self.load.loading_more = false;
-                        if e.is_fatal() {
-                            self.should_quit = true;
-                        }
-                    }
+            Err(e) => {
+                self.load.set_error(e.user_message());
+                self.load.set_loading(false);
+                if e.is_fatal() {
+                    self.should_quit = true;
                 }
             }
-            AsyncResult::Comments {
-                story_id,
-                task_id,
-                result,
-            } => {
-                let is_current =
-                    matches!(&self.view, View::Comments { story_id: id, .. } if *id == story_id);
-                if !is_current {
-                    self.debug.end_task(task_id, "discarded (wrong view)");
-                    return;
+        }
+    }
+
+    fn handle_more_stories_result(&mut self, r: StoriesResult) {
+        if r.generation != self.generation {
+            self.debug.end_task(r.task_id, "discarded (stale)");
+            return;
+        }
+        self.debug.end_task(
+            r.task_id,
+            if r.result.is_ok() {
+                "completed"
+            } else {
+                "failed"
+            },
+        );
+        match r.result {
+            Ok(stories) => {
+                if stories.is_empty() {
+                    self.load.has_more = false;
+                } else {
+                    self.stories.extend(stories);
+                    self.load.current_page += 1;
+                    if let Some(new_ts) = r.fetched_at {
+                        self.stories_fetched_at = Some(
+                            self.stories_fetched_at
+                                .map(|old| old.min(new_ts))
+                                .unwrap_or(new_ts),
+                        );
+                    }
                 }
-                self.debug.end_task(
-                    task_id,
-                    if result.is_ok() {
-                        "completed"
-                    } else {
-                        "failed"
-                    },
-                );
-                match result {
-                    Ok(comments) => {
-                        self.comment_tree.set(comments);
-                        self.load.set_loading(false);
-                    }
-                    Err(e) => {
-                        self.load.set_error(e.user_message());
-                        self.load.set_loading(false);
-                        if e.is_fatal() {
-                            self.should_quit = true;
-                        }
-                    }
+                self.load.loading_more = false;
+                if self.should_fill_viewport() {
+                    self.load_more();
+                }
+            }
+            Err(e) => {
+                self.load.set_error(e.user_message());
+                self.load.loading_more = false;
+                if e.is_fatal() {
+                    self.should_quit = true;
+                }
+            }
+        }
+    }
+
+    fn handle_comments_result(&mut self, r: CommentsResult) {
+        let is_current =
+            matches!(&self.view, View::Comments { story_id, .. } if *story_id == r.story_id);
+        if !is_current {
+            self.debug.end_task(r.task_id, "discarded (wrong view)");
+            return;
+        }
+        self.debug.end_task(
+            r.task_id,
+            if r.result.is_ok() {
+                "completed"
+            } else {
+                "failed"
+            },
+        );
+        match r.result {
+            Ok(comments) => {
+                self.comment_tree.set(comments);
+                self.comments_fetched_at = r.fetched_at;
+                self.load.set_loading(false);
+            }
+            Err(e) => {
+                self.load.set_error(e.user_message());
+                self.load.set_loading(false);
+                if e.is_fatal() {
+                    self.should_quit = true;
                 }
             }
         }
@@ -787,6 +797,7 @@ impl App {
         self.load.set_loading(true);
         self.load.clear_error();
         self.stories.clear();
+        self.stories_fetched_at = None;
         self.load.current_page = 0;
         self.load.has_more = true;
         self.spawn_stories_fetch(0, false, false);
@@ -851,20 +862,22 @@ impl App {
         let task_id = self.debug.start_task(task_desc);
 
         tokio::spawn(async move {
-            let result = client.fetch_stories(feed, page, force_refresh).await;
+            let api_result = client.fetch_stories(feed, page, force_refresh).await;
+            let (result, fetched_at) = match api_result {
+                Ok((stories, ts)) => (Ok(stories), ts),
+                Err(e) => (Err(e), None),
+            };
 
+            let stories_result = StoriesResult {
+                generation,
+                task_id,
+                result,
+                fetched_at,
+            };
             let msg = if is_more {
-                AsyncResult::MoreStories {
-                    generation,
-                    task_id,
-                    result,
-                }
+                AsyncResult::MoreStories(stories_result)
             } else {
-                AsyncResult::Stories {
-                    generation,
-                    task_id,
-                    result,
-                }
+                AsyncResult::Stories(stories_result)
             };
             let _ = tx.send(msg).await;
         });
@@ -887,13 +900,18 @@ impl App {
         let task_id = self.debug.start_task(task_desc);
 
         tokio::spawn(async move {
-            let result = client.fetch_comments_flat(&story, force_refresh).await;
+            let api_result = client.fetch_comments_flat(&story, force_refresh).await;
+            let (result, fetched_at) = match api_result {
+                Ok((comments, ts)) => (Ok(comments), ts),
+                Err(e) => (Err(e), None),
+            };
             let _ = tx
-                .send(AsyncResult::Comments {
+                .send(AsyncResult::Comments(CommentsResult {
                     story_id,
                     task_id,
                     result,
-                })
+                    fetched_at,
+                }))
                 .await;
         });
     }

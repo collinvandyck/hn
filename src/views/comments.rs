@@ -16,7 +16,7 @@ use crate::help::comments_help;
 use crate::keys::{comments_keymap, global_keymap};
 use crate::theme::ResolvedTheme;
 use crate::time::{Clock, format_relative};
-use crate::views::common::render_error;
+use crate::views::common::{render_error, render_with_timestamp};
 use crate::views::html::strip_html;
 use crate::views::status_bar::StatusBar;
 use crate::views::tree::{
@@ -61,8 +61,15 @@ fn render_header(frame: &mut Frame, app: &App, title: &str, area: Rect, theme: &
         ));
     }
 
-    let header = Paragraph::new(Line::from(spans));
-    frame.render_widget(header, area);
+    let title_line = Line::from(spans);
+    render_with_timestamp(
+        frame,
+        title_line,
+        app.comments_fetched_at,
+        app.clock.now(),
+        theme,
+        area,
+    );
 }
 
 fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {

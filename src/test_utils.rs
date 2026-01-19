@@ -207,6 +207,8 @@ pub struct TestAppBuilder {
     clock: Arc<dyn Clock>,
     viewport_height: Option<u16>,
     config_dir: Option<PathBuf>,
+    stories_fetched_at: Option<u64>,
+    comments_fetched_at: Option<u64>,
 }
 
 impl Default for TestAppBuilder {
@@ -237,6 +239,8 @@ impl TestAppBuilder {
             clock: fixed_clock(TEST_NOW),
             viewport_height: None,
             config_dir: None,
+            stories_fetched_at: None,
+            comments_fetched_at: None,
         }
     }
 
@@ -316,6 +320,16 @@ impl TestAppBuilder {
         self
     }
 
+    pub fn stories_fetched_at(mut self, ts: u64) -> Self {
+        self.stories_fetched_at = Some(ts);
+        self
+    }
+
+    pub fn comments_fetched_at(mut self, ts: u64) -> Self {
+        self.comments_fetched_at = Some(ts);
+        self
+    }
+
     pub fn build(self) -> App {
         let (result_tx, result_rx) = mpsc::channel(10);
 
@@ -357,6 +371,8 @@ impl TestAppBuilder {
             theme_picker: None,
             config_dir: self.config_dir,
             flash_message: None,
+            stories_fetched_at: self.stories_fetched_at,
+            comments_fetched_at: self.comments_fetched_at,
         }
     }
 }
