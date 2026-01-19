@@ -2,4 +2,5 @@
 gh = "latest"
 just = "latest"
 lazygit = "latest"
+oxipng = "latest"
 rust = ["stable", "nightly"]
