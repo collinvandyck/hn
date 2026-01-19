@@ -10,7 +10,7 @@ use crate::comment_tree::CommentTree;
 use crate::settings::{self, Settings};
 use crate::storage::Storage;
 use crate::theme::{ResolvedTheme, Theme, all_themes};
-use crate::time::Clock;
+use crate::time::{Clock, now_unix};
 
 pub enum AsyncResult {
     Stories {
@@ -709,12 +709,7 @@ impl App {
         if let Some(story) = self.stories.iter_mut().find(|s| s.id == id)
             && story.read_at.is_none()
         {
-            story.read_at = Some(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            );
+            story.read_at = Some(now_unix());
             self.spawn_mark_story_read(id);
         }
     }

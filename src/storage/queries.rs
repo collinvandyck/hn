@@ -1,16 +1,10 @@
 use rusqlite::{Connection, params, params_from_iter};
 
 use crate::api::Feed;
+use crate::time::now_unix;
 
 use super::StorageError;
 use super::types::{CachedFeed, StorableComment, StorableStory};
-
-fn now_unix() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-}
 
 fn kids_to_json(kids: &[u64]) -> String {
     serde_json::to_string(kids).unwrap_or_else(|_| "[]".to_string())

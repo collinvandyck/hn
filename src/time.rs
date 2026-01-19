@@ -1,6 +1,15 @@
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, TimeZone, Utc};
+
+/// Returns the current Unix timestamp in seconds.
+pub fn now_unix() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
 
 pub trait Clock: Send + Sync {
     fn now(&self) -> DateTime<Utc>;

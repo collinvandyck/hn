@@ -1,13 +1,7 @@
 use std::time::Duration;
 
 use crate::api::{Comment, Feed, Story};
-
-fn now_unix() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-}
+use crate::time::now_unix;
 
 #[derive(Debug, Clone)]
 pub struct StorableStory {

@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 
 use super::StorageError;
+use crate::time::now_unix;
 
 #[allow(dead_code)] // Used by future features
 pub const CURRENT_VERSION: i64 = 1;
@@ -14,13 +15,6 @@ const MIGRATIONS: &[Migration] = &[Migration {
     version: 1,
     sql: include_str!("sql/001_initial.sql"),
 }];
-
-fn now_unix() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
-}
 
 pub fn run_migrations(conn: &Connection) -> Result<(), StorageError> {
     conn.execute(
@@ -47,7 +41,7 @@ pub fn run_migrations(conn: &Connection) -> Result<(), StorageError> {
 
             conn.execute(
                 "INSERT INTO _schema (version, applied_at) VALUES (?1, ?2)",
-                rusqlite::params![migration.version, now_unix()],
+                rusqlite::params![migration.version, now_unix() as i64],
             )?;
         }
     }

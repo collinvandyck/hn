@@ -243,13 +243,7 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn now_unix() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    }
+    use crate::time::now_unix;
 
     #[tokio::test]
     async fn test_story_round_trip() {
