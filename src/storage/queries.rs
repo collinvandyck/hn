@@ -199,31 +199,29 @@ pub fn save_feed(conn: &Connection, feed: Feed, ids: &[u64]) -> Result<(), Stora
     let feed_type = feed_type_str(feed);
     let now = now_unix() as i64;
     let tx = conn.unchecked_transaction()?;
-    // Update or insert feed metadata
+    // Upsert feed metadata and get the ID
     tx.execute(
-        "INSERT OR REPLACE INTO feeds (feed_type, fetched_at) VALUES (?1, ?2)",
+        "INSERT INTO feeds (feed_type, fetched_at) VALUES (?1, ?2)
+         ON CONFLICT(feed_type) DO UPDATE SET fetched_at = excluded.fetched_at",
         params![feed_type, now],
     )?;
-    if ids.is_empty() {
-        tx.execute(
-            "DELETE FROM feed_stories WHERE feed_type = ?1",
-            params![feed_type],
-        )?;
-    } else {
-        // Insert story positions
+    let feed_id: i64 = tx.query_row(
+        "SELECT id FROM feeds WHERE feed_type = ?1",
+        params![feed_type],
+        |row| row.get(0),
+    )?;
+    // Clear existing feed_stories for this feed
+    tx.execute(
+        "DELETE FROM feed_stories WHERE feed_id = ?1",
+        params![feed_id],
+    )?;
+    if !ids.is_empty() {
         let mut stmt = tx.prepare(
-            "INSERT OR REPLACE INTO feed_stories (feed_type, position, story_id)
-             VALUES (?1, ?2, ?3)",
+            "INSERT INTO feed_stories (feed_id, position, story_id) VALUES (?1, ?2, ?3)",
         )?;
         for (position, &story_id) in ids.iter().enumerate() {
-            stmt.execute(params![feed_type, position as i64, story_id as i64])?;
+            stmt.execute(params![feed_id, position as i64, story_id as i64])?;
         }
-        drop(stmt);
-        // Delete old positions beyond current list
-        tx.execute(
-            "DELETE FROM feed_stories WHERE feed_type = ?1 AND position >= ?2",
-            params![feed_type, ids.len() as i64],
-        )?;
     }
     tx.commit()?;
     Ok(())
@@ -232,20 +230,20 @@ pub fn save_feed(conn: &Connection, feed: Feed, ids: &[u64]) -> Result<(), Stora
 pub fn get_feed(conn: &Connection, feed: Feed) -> Result<Option<CachedFeed>, StorageError> {
     let feed_type = feed_type_str(feed);
     // Get feed metadata
-    let fetched_at: Option<i64> = conn
+    let row: Option<(i64, i64)> = conn
         .query_row(
-            "SELECT fetched_at FROM feeds WHERE feed_type = ?1",
+            "SELECT id, fetched_at FROM feeds WHERE feed_type = ?1",
             params![feed_type],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .ok();
-    let Some(fetched_at) = fetched_at else {
+    let Some((feed_id, fetched_at)) = row else {
         return Ok(None);
     };
     // Get story IDs in order
     let mut stmt =
-        conn.prepare("SELECT story_id FROM feed_stories WHERE feed_type = ?1 ORDER BY position")?;
-    let rows = stmt.query_map(params![feed_type], |row| row.get::<_, i64>(0))?;
+        conn.prepare("SELECT story_id FROM feed_stories WHERE feed_id = ?1 ORDER BY position")?;
+    let rows = stmt.query_map(params![feed_id], |row| row.get::<_, i64>(0))?;
     let ids: Vec<u64> = rows.filter_map(|r| r.ok()).map(|id| id as u64).collect();
     if ids.is_empty() {
         return Ok(None);

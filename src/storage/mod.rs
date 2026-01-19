@@ -356,10 +356,24 @@ mod tests {
     #[tokio::test]
     async fn test_feed_round_trip() {
         let storage = Storage::open(StorageLocation::InMemory).unwrap();
-
+        // Create stories first (FK constraint requires them to exist)
+        for id in [100, 101, 102, 103, 104] {
+            let story = StorableStory {
+                id,
+                title: format!("Story {}", id),
+                url: None,
+                score: 10,
+                by: "user".to_string(),
+                time: 1700000000,
+                descendants: 0,
+                kids: vec![],
+                fetched_at: now_unix(),
+                read_at: None,
+            };
+            storage.save_story(&story).await.unwrap();
+        }
         let ids = vec![100, 101, 102, 103, 104];
         storage.save_feed(Feed::Top, &ids).await.unwrap();
-
         let loaded = storage.get_feed(Feed::Top).await.unwrap();
         assert!(loaded.is_some());
         let loaded = loaded.unwrap();

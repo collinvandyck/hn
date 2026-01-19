@@ -3,8 +3,6 @@ use rusqlite::Connection;
 use super::StorageError;
 use crate::time::now_unix;
 
-pub const CURRENT_VERSION: i64 = 2;
-
 struct Migration {
     version: i64,
     sql: &'static str,
@@ -18,6 +16,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 2,
         sql: include_str!("sql/002_normalize_feeds.sql"),
+    },
+    Migration {
+        version: 3,
+        sql: include_str!("sql/003_feeds_synthetic_id.sql"),
     },
 ];
 
@@ -88,6 +90,7 @@ mod tests {
         let version: i64 = conn
             .query_row("SELECT MAX(version) FROM _schema", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, CURRENT_VERSION);
+        let expected = MIGRATIONS.last().unwrap().version;
+        assert_eq!(version, expected);
     }
 }

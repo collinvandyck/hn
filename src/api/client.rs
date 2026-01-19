@@ -106,11 +106,17 @@ impl HnClient {
                 info!(source = "cache", "using cached feed");
                 (cached.ids, cached.fetched_at)
             } else {
-                self.fetch_and_save_feed(feed).await?
+                let ids = self.fetch_feed_ids(feed).await?;
+                let fetched_at = now_unix();
+                self.storage.save_feed(feed, &ids).await?;
+                (ids, fetched_at)
             }
         } else if page == 0 {
             // Force refresh on page 0
-            self.fetch_and_save_feed(feed).await?
+            let ids = self.fetch_feed_ids(feed).await?;
+            let fetched_at = now_unix();
+            self.storage.save_feed(feed, &ids).await?;
+            (ids, fetched_at)
         } else {
             // For page > 0, we need the feed IDs but timestamp comes from page 0
             // Just fetch IDs, timestamp will be ignored by caller for pagination
@@ -131,14 +137,6 @@ impl HnClient {
             stories,
             fetched_at,
         })
-    }
-
-    /// Fetches feed IDs from API and saves to storage, returning IDs and timestamp.
-    async fn fetch_and_save_feed(&self, feed: Feed) -> Result<(Vec<u64>, u64), ApiError> {
-        let ids = self.fetch_feed_ids(feed).await?;
-        let fetched_at = now_unix();
-        self.storage.save_feed(feed, &ids).await?;
-        Ok((ids, fetched_at))
     }
 
     pub async fn fetch_stories_by_ids(
