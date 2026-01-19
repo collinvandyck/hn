@@ -5,6 +5,9 @@ set -e
 SOCKET="${1:-/tmp/hn-harness.sock}"
 TIMEOUT="${2:-10}"
 
+# Build first (separate from run so timeout only covers startup)
+mise exec -- cargo build --release --bin agent-harness
+
 # Clean up any existing socket
 rm -f "$SOCKET"
 

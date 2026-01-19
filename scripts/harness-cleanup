@@ -10,9 +10,9 @@ for pattern in 'agent-harness' 'target/release/hn --dark' 'target/debug/hn --dar
     done
 done
 
-# Clean up any nc processes connected to harness sockets
+# Clean up any nc processes connected to harness sockets (with timeout to avoid hangs)
 for sock in /tmp/hn-harness.sock /tmp/hn-test*.sock /tmp/hn.sock; do
-    fuser -k "$sock" 2>/dev/null || true
+    timeout 1 fuser -k "$sock" 2>/dev/null || true
 done
 
 # Clean up socket files
