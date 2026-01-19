@@ -6,17 +6,18 @@ expression: output
 
 
 
-
-                             ┌Help────────────────┐
-                             │j/k  navigate       │
-                             │g/G  top/bottom     │
-                             │H/L  switch feeds   │
-                             │  l  open comments  │
-                             │  o  open link      │
-                             │  y  copy url       │
-                             │  r  refresh        │
-                             │  t  themes         │
-                             │  `  debug          │
-                             │  q  quit           │
-                             │  ?  close          │
-                             └────────────────────┘
+                            ┌Help──────────────────┐
+                            │                      │
+                            │ j/k  navigate        │
+                            │ g/G  top/bottom      │
+                            │ H/L  switch feeds    │
+                            │   l  open comments   │
+                            │   o  open link       │
+                            │   y  copy url        │
+                            │   r  refresh         │
+                            │   t  themes          │
+                            │   `  debug           │
+                            │   q  quit            │
+                            │   ?  close           │
+                            │                      │
+                            └──────────────────────┘

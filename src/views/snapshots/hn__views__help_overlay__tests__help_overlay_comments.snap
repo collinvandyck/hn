@@ -5,20 +5,21 @@ expression: output
 
 
 
-
-                           ┌Help────────────────────┐
-                           │j/k  navigate           │
-                           │l/h  expand/collapse    │
-                           │L/H  subtree            │
-                           │+/-  all comments       │
-                           │  o  open comment link  │
-                           │  O  open story link    │
-                           │  y  copy url           │
-                           │  Y  copy story url     │
-                           │Esc  back to stories    │
-                           │  r  refresh            │
-                           │  t  themes             │
-                           │  `  debug              │
-                           │  q  quit               │
-                           │  ?  close              │
-                           └────────────────────────┘
+                          ┌Help──────────────────────┐
+                          │                          │
+                          │ j/k  navigate            │
+                          │ l/h  expand/collapse     │
+                          │ L/H  subtree             │
+                          │ +/-  all comments        │
+                          │   o  open comment link   │
+                          │   O  open story link     │
+                          │   y  copy url            │
+                          │   Y  copy story url      │
+                          │ Esc  back to stories     │
+                          │   r  refresh             │
+                          │   t  themes              │
+                          │   `  debug               │
+                          │   q  quit                │
+                          │   ?  close               │
+                          │                          │
+                          └──────────────────────────┘

@@ -3,8 +3,9 @@
 use ratatui::{
     Frame,
     layout::Rect,
+    style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, Padding, Paragraph},
 };
 
 use crate::app::{App, View};
@@ -39,9 +40,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     // Calculate dimensions
     let key_width = formatted.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
     let label_width = formatted.iter().map(|(_, l)| l.len()).max().unwrap_or(0);
-    let content_width = key_width + 2 + label_width; // 2 for spacing
-    let popup_width = (content_width + 4) as u16; // 4 for borders and padding
-    let popup_height = (formatted.len() + 2) as u16; // 2 for borders
+    let content_width = key_width + 2 + label_width; // 2 for column spacing
+    let padding = 2; // 1 char padding on each side
+    let popup_width = (content_width + 2 + padding * 2) as u16; // 2 for borders
+    let popup_height = (formatted.len() + 2 + 2) as u16; // 2 for borders, 2 for vertical padding
 
     // Ensure popup fits in area
     let popup_width = popup_width.min(area.width.saturating_sub(4));
@@ -51,18 +53,30 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     // Clear the area behind the popup
     frame.render_widget(Clear, popup_area);
 
-    // Build content lines
+    // Alternating row background
+    let alt_row_style = Style::default().bg(theme.selection_bg);
+
+    // Build content lines with alternating backgrounds
     let lines: Vec<Line> = formatted
         .iter()
-        .map(|(keys, label)| {
-            Line::from(vec![
-                Span::styled(
-                    format!("{:>width$}", keys, width = key_width),
-                    theme.dim_style(),
-                ),
-                Span::raw("  "),
-                Span::styled(*label, theme.story_title_style()),
-            ])
+        .enumerate()
+        .map(|(i, (keys, label))| {
+            let base_style = if i % 2 == 1 {
+                alt_row_style
+            } else {
+                Style::default()
+            };
+            // Pad the line to fill the content width for consistent background
+            let key_span = Span::styled(
+                format!("{:>width$}", keys, width = key_width),
+                theme.dim_style().patch(base_style),
+            );
+            let spacer = Span::styled("  ", base_style);
+            let label_span = Span::styled(
+                format!("{:<width$}", label, width = label_width),
+                theme.story_title_style().patch(base_style),
+            );
+            Line::from(vec![key_span, spacer, label_span])
         })
         .collect();
 
@@ -70,7 +84,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         Block::default()
             .borders(Borders::ALL)
             .border_style(theme.border_style())
-            .title("Help"),
+            .title("Help")
+            .title_style(theme.active_tab_style())
+            .padding(Padding::uniform(1)),
     );
 
     frame.render_widget(paragraph, popup_area);
