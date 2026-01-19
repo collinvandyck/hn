@@ -1,6 +1,7 @@
 pub mod comments;
 pub mod common;
 pub mod debug;
+pub mod help_overlay;
 pub mod html;
 pub mod spinner;
 pub mod status_bar;

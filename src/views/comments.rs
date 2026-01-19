@@ -246,7 +246,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     use super::spinner::spinner_frame;
 
     let keymap = global_keymap().extend(comments_keymap());
-    let help_text = comments_help().format(&keymap, app.show_help);
+    let help_text = comments_help().format(&keymap, false);
 
     let loading_text = if app.load.loading {
         Some(format!(

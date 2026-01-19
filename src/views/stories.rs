@@ -11,6 +11,7 @@ use crate::api::{Feed, Story};
 use crate::app::App;
 use crate::help::stories_help;
 use crate::keys::{global_keymap, stories_keymap};
+
 use crate::theme::ResolvedTheme;
 use crate::time::{Clock, format_relative};
 use crate::views::common::render_error;
@@ -128,7 +129,7 @@ fn story_to_list_item(
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let keymap = global_keymap().extend(stories_keymap());
-    let help_text = stories_help().format(&keymap, app.show_help);
+    let help_text = stories_help().format(&keymap, false);
     StatusBar::new(&app.theme)
         .label(app.feed.label())
         .position(app.selected_index + 1, app.stories.len())
@@ -196,17 +197,15 @@ mod tests {
     }
 
     #[test]
-    fn test_stories_view_with_help() {
-        let app = TestAppBuilder::new()
-            .with_stories(sample_stories())
-            .show_help()
-            .build();
+    fn test_stories_view_status_bar_shows_help_hint() {
+        let app = TestAppBuilder::new().with_stories(sample_stories()).build();
 
         let output = render_to_string(80, 24, |frame| {
             render(frame, &app, frame.area());
         });
 
-        assert!(output.contains("j/k:nav"));
+        // Status bar shows compact help with ?:help
+        assert!(output.contains("?:help"));
     }
 
     #[test]

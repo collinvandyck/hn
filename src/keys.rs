@@ -105,6 +105,14 @@ pub fn theme_picker_keymap() -> Keymap {
         .bind(KeyCode::Char('q'), Message::CloseThemePicker)
 }
 
+/// Keybindings for the help overlay popup.
+fn help_overlay_keymap() -> Keymap {
+    Keymap::new()
+        .bind(KeyCode::Char('?'), Message::ToggleHelp)
+        .bind(KeyCode::Esc, Message::ToggleHelp)
+        .bind(KeyCode::Char('q'), Message::ToggleHelp)
+}
+
 /// Navigation keybindings shared between stories and comments views.
 fn navigation_keymap() -> Keymap {
     Keymap::new()
@@ -158,6 +166,11 @@ pub fn handle_key(key: KeyEvent, app: &App) -> Option<Message> {
     // Theme picker takes priority when open
     if app.theme_picker.is_some() {
         return theme_picker_keymap().get(&key);
+    }
+
+    // Help overlay takes priority when open
+    if app.help_overlay {
+        return help_overlay_keymap().get(&key);
     }
 
     // Global keys first

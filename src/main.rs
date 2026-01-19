@@ -238,4 +238,9 @@ fn render(app: &App, frame: &mut Frame) {
     if app.theme_picker.is_some() {
         views::theme_picker::render(frame, app, area);
     }
+
+    // Render help overlay if open (but not if theme picker is open)
+    if app.help_overlay && app.theme_picker.is_none() {
+        views::help_overlay::render(frame, app, area);
+    }
 }

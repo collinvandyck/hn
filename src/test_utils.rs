@@ -201,7 +201,7 @@ pub struct TestAppBuilder {
     current_page: usize,
     has_more: bool,
     error: Option<String>,
-    show_help: bool,
+    help_overlay: bool,
     scroll_offset: usize,
     theme: ResolvedTheme,
     clock: Arc<dyn Clock>,
@@ -231,7 +231,7 @@ impl TestAppBuilder {
             current_page: 0,
             has_more: true,
             error: None,
-            show_help: false,
+            help_overlay: false,
             scroll_offset: 0,
             theme: default_for_variant(ThemeVariant::Dark),
             clock: fixed_clock(TEST_NOW),
@@ -286,8 +286,8 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn show_help(mut self) -> Self {
-        self.show_help = true;
+    pub fn help_overlay(mut self) -> Self {
+        self.help_overlay = true;
         self
     }
 
@@ -344,7 +344,7 @@ impl TestAppBuilder {
             selected_index: self.selected_index,
             load,
             should_quit: false,
-            show_help: self.show_help,
+            help_overlay: self.help_overlay,
             client: HnClient::new(Some(Storage::open(StorageLocation::InMemory).unwrap())),
             scroll_offset: self.scroll_offset,
             theme: self.theme,

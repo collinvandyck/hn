@@ -45,6 +45,24 @@ impl HelpItem {
         }
         Some(format!("{}:{}", keys.join("/"), self.label))
     }
+
+    /// Format this help item for overlay display.
+    /// Returns (keys_string, label) or None if no keys are bound.
+    pub fn format_for_overlay(&self, keymap: &Keymap) -> Option<(String, &'static str)> {
+        let keys: Vec<String> = self
+            .messages
+            .iter()
+            .filter_map(|msg| {
+                keymap
+                    .find_key(msg)
+                    .map(|(code, mods)| format_key(code, mods))
+            })
+            .collect();
+        if keys.is_empty() {
+            return None;
+        }
+        Some((keys.join("/"), self.label))
+    }
 }
 
 /// A collection of help items for a specific context.
@@ -141,6 +159,45 @@ pub fn theme_picker_help() -> HelpConfig {
             HelpItem::new(CloseThemePicker, "cancel"),
         ],
     }
+}
+
+/// Help items for the stories view overlay.
+pub fn stories_overlay_items() -> Vec<HelpItem> {
+    use Message::*;
+    vec![
+        HelpItem::pair(SelectNext, SelectPrev, "navigate"),
+        HelpItem::pair(SelectFirst, SelectLast, "top/bottom"),
+        HelpItem::pair(PrevFeed, NextFeed, "switch feeds"),
+        HelpItem::new(OpenComments, "open comments"),
+        HelpItem::new(OpenUrl, "open link"),
+        HelpItem::new(CopyUrl, "copy url"),
+        HelpItem::new(Refresh, "refresh"),
+        HelpItem::new(OpenThemePicker, "themes"),
+        HelpItem::new(ToggleDebug, "debug"),
+        HelpItem::new(Quit, "quit"),
+        HelpItem::new(ToggleHelp, "close"),
+    ]
+}
+
+/// Help items for the comments view overlay.
+pub fn comments_overlay_items() -> Vec<HelpItem> {
+    use Message::*;
+    vec![
+        HelpItem::pair(SelectNext, SelectPrev, "navigate"),
+        HelpItem::pair(ExpandComment, CollapseComment, "expand/collapse"),
+        HelpItem::pair(ExpandSubtree, CollapseSubtree, "subtree"),
+        HelpItem::pair(ExpandThread, CollapseThread, "all comments"),
+        HelpItem::new(OpenUrl, "open comment link"),
+        HelpItem::new(OpenStoryUrl, "open story link"),
+        HelpItem::new(CopyUrl, "copy url"),
+        HelpItem::new(CopyStoryUrl, "copy story url"),
+        HelpItem::new(Back, "back to stories"),
+        HelpItem::new(Refresh, "refresh"),
+        HelpItem::new(OpenThemePicker, "themes"),
+        HelpItem::new(ToggleDebug, "debug"),
+        HelpItem::new(Quit, "quit"),
+        HelpItem::new(ToggleHelp, "close"),
+    ]
 }
 
 #[cfg(test)]
