@@ -9,6 +9,8 @@ use ratatui::{
 
 use crate::api::{Feed, Story};
 use crate::app::App;
+use crate::help::stories_help;
+use crate::keys::{global_keymap, stories_keymap};
 use crate::theme::ResolvedTheme;
 use crate::time::{Clock, format_relative};
 use crate::views::common::render_error;
@@ -125,16 +127,12 @@ fn story_to_list_item(
 }
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
-    let help_text = if app.show_help {
-        "j/k:nav  g/G:top/bottom  H/L:feeds  o:open  y:copy  l:comments  1-6:feeds  r:refresh  t:themes  `:debug  q:quit  ?:hide"
-    } else {
-        "H/L:feeds  ?:help  q:quit"
-    };
-
+    let keymap = global_keymap().extend(stories_keymap());
+    let help_text = stories_help().format(&keymap, app.show_help);
     StatusBar::new(&app.theme)
         .label(app.feed.label())
         .position(app.selected_index + 1, app.stories.len())
-        .help(help_text)
+        .help(&help_text)
         .flash(app.flash_text())
         .render(frame, area);
 }

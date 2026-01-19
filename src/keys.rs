@@ -44,6 +44,38 @@ impl Keymap {
         self.bindings.extend(other.bindings);
         self
     }
+
+    /// Find the first key bound to a specific message.
+    pub fn find_key(&self, message: &Message) -> Option<(KeyCode, KeyModifiers)> {
+        self.bindings
+            .iter()
+            .find(|(_, _, msg)| msg == message)
+            .map(|(code, mods, _)| (*code, *mods))
+    }
+}
+
+/// Format a key binding for display in help text.
+pub fn format_key(code: KeyCode, mods: KeyModifiers) -> String {
+    let key_str = match code {
+        KeyCode::Char(c) => c.to_string(),
+        KeyCode::Enter => "Enter".to_string(),
+        KeyCode::Esc => "Esc".to_string(),
+        KeyCode::Up => "↑".to_string(),
+        KeyCode::Down => "↓".to_string(),
+        KeyCode::Left => "←".to_string(),
+        KeyCode::Right => "→".to_string(),
+        KeyCode::Backspace => "Bksp".to_string(),
+        KeyCode::Tab => "Tab".to_string(),
+        KeyCode::F(n) => format!("F{}", n),
+        _ => "?".to_string(),
+    };
+    if mods.contains(KeyModifiers::CONTROL) {
+        format!("C-{}", key_str)
+    } else if mods.contains(KeyModifiers::ALT) {
+        format!("M-{}", key_str)
+    } else {
+        key_str
+    }
 }
 
 impl Default for Keymap {
@@ -53,7 +85,7 @@ impl Default for Keymap {
 }
 
 /// Global keybindings that work in all views.
-fn global_keymap() -> Keymap {
+pub fn global_keymap() -> Keymap {
     Keymap::new()
         .bind(KeyCode::Char('q'), Message::Quit)
         .bind_ctrl(KeyCode::Char('c'), Message::Quit)
@@ -62,7 +94,7 @@ fn global_keymap() -> Keymap {
 }
 
 /// Keybindings for the theme picker popup.
-fn theme_picker_keymap() -> Keymap {
+pub fn theme_picker_keymap() -> Keymap {
     Keymap::new()
         .bind(KeyCode::Char('j'), Message::ThemePickerDown)
         .bind(KeyCode::Down, Message::ThemePickerDown)
@@ -92,7 +124,7 @@ fn navigation_keymap() -> Keymap {
 }
 
 /// Stories view keybindings.
-fn stories_keymap() -> Keymap {
+pub fn stories_keymap() -> Keymap {
     navigation_keymap()
         .bind(KeyCode::Char('l'), Message::OpenComments)
         .bind(KeyCode::Enter, Message::OpenComments)
@@ -107,7 +139,7 @@ fn stories_keymap() -> Keymap {
 }
 
 /// Comments view keybindings.
-fn comments_keymap() -> Keymap {
+pub fn comments_keymap() -> Keymap {
     navigation_keymap()
         .bind(KeyCode::Char('l'), Message::ExpandComment)
         .bind(KeyCode::Char('h'), Message::CollapseComment)

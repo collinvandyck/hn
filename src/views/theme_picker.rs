@@ -5,6 +5,8 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::help::theme_picker_help;
+use crate::keys::theme_picker_keymap;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let Some(picker) = &app.theme_picker else {
@@ -50,7 +52,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, chunks[0], &mut state);
 
     // Help line
-    let help = Paragraph::new("j/k:select  Enter:confirm  Esc:cancel").style(theme.dim_style());
+    let keymap = theme_picker_keymap();
+    let help_text = theme_picker_help().format(&keymap, true);
+    let help = Paragraph::new(help_text).style(theme.dim_style());
     frame.render_widget(help, chunks[1]);
 }
 

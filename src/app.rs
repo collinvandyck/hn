@@ -157,7 +157,7 @@ pub struct ThemePicker {
     pub original: ResolvedTheme,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     SelectNext,
     SelectPrev,

@@ -3,6 +3,7 @@ mod app;
 mod cli;
 mod comment_tree;
 mod event;
+mod help;
 mod keys;
 mod logging;
 mod settings;

@@ -12,6 +12,8 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::api::Comment;
 use crate::app::{App, View};
+use crate::help::comments_help;
+use crate::keys::{comments_keymap, global_keymap};
 use crate::theme::ResolvedTheme;
 use crate::time::{Clock, format_relative};
 use crate::views::common::render_error;
@@ -243,11 +245,8 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     use super::spinner::spinner_frame;
 
-    let help_text = if app.show_help {
-        "j/k:nav  l/h:expand  L/H:subtree  +/-:thread  o:link  O:story  y:copy  Y:copy story  Esc:back  r:refresh  t:themes  `:debug  q:quit  ?:hide"
-    } else {
-        "l/h:expand  L/H:subtree  +/-:thread  Esc:back  ?:help"
-    };
+    let keymap = global_keymap().extend(comments_keymap());
+    let help_text = comments_help().format(&keymap, app.show_help);
 
     let loading_text = if app.load.loading {
         Some(format!(
@@ -261,7 +260,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let mut status_bar = StatusBar::new(&app.theme)
         .label("Comments")
         .position(app.selected_index + 1, app.comment_tree.len())
-        .help(help_text)
+        .help(&help_text)
         .flash(app.flash_text());
 
     if let Some(ref text) = loading_text {
