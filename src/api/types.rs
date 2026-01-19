@@ -46,6 +46,7 @@ pub struct Story {
     pub descendants: u32,
     pub kids: Vec<u64>,
     pub read_at: Option<u64>,
+    pub favorited_at: Option<u64>,
 }
 
 impl Story {
@@ -60,11 +61,16 @@ impl Story {
             descendants: item.descendants.unwrap_or(0),
             kids: item.kids,
             read_at: None,
+            favorited_at: None,
         })
     }
 
     pub fn is_read(&self) -> bool {
         self.read_at.is_some()
+    }
+
+    pub fn is_favorited(&self) -> bool {
+        self.favorited_at.is_some()
     }
 
     pub fn domain(&self) -> &str {
@@ -99,6 +105,7 @@ pub struct Comment {
     pub depth: usize,
     #[allow(dead_code)] // Kept for future nested threading
     pub kids: Vec<u64>,
+    pub favorited_at: Option<u64>,
 }
 
 impl Comment {
@@ -114,7 +121,12 @@ impl Comment {
             time: item.time.unwrap_or(0),
             depth,
             kids: item.kids,
+            favorited_at: None,
         })
+    }
+
+    pub fn is_favorited(&self) -> bool {
+        self.favorited_at.is_some()
     }
 
     /// URL to the HN permalink for this comment.
@@ -207,6 +219,7 @@ mod tests {
             descendants: 0,
             kids: vec![],
             read_at: None,
+            favorited_at: None,
         };
         assert_eq!(story.domain(), "example.com");
     }
@@ -223,6 +236,7 @@ mod tests {
             descendants: 0,
             kids: vec![],
             read_at: None,
+            favorited_at: None,
         };
         assert_eq!(story.domain(), "self");
     }

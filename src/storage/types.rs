@@ -3,21 +3,6 @@ use std::time::Duration;
 use crate::api::{Comment, Feed, Story};
 use crate::time::now_unix;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FavoriteType {
-    Story,
-    Comment,
-}
-
-impl FavoriteType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            FavoriteType::Story => "story",
-            FavoriteType::Comment => "comment",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct StorableStory {
     pub id: u64,
@@ -30,6 +15,7 @@ pub struct StorableStory {
     pub kids: Vec<u64>,
     pub fetched_at: u64,
     pub read_at: Option<u64>,
+    pub favorited_at: Option<u64>,
 }
 
 impl StorableStory {
@@ -52,6 +38,7 @@ impl From<&Story> for StorableStory {
             kids: story.kids.clone(),
             fetched_at: now_unix(),
             read_at: story.read_at,
+            favorited_at: story.favorited_at,
         }
     }
 }
@@ -68,6 +55,7 @@ impl From<StorableStory> for Story {
             descendants: stored.descendants,
             kids: stored.kids,
             read_at: stored.read_at,
+            favorited_at: stored.favorited_at,
         }
     }
 }
@@ -83,6 +71,7 @@ pub struct StorableComment {
     pub depth: usize,
     pub kids: Vec<u64>,
     pub fetched_at: u64,
+    pub favorited_at: Option<u64>,
 }
 
 impl StorableComment {
@@ -102,6 +91,7 @@ impl StorableComment {
             depth: comment.depth,
             kids: comment.kids.clone(),
             fetched_at: now_unix(),
+            favorited_at: comment.favorited_at,
         }
     }
 }
@@ -115,6 +105,7 @@ impl From<StorableComment> for Comment {
             time: stored.time,
             depth: stored.depth,
             kids: stored.kids,
+            favorited_at: stored.favorited_at,
         }
     }
 }

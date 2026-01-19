@@ -1,9 +1,14 @@
-CREATE TABLE IF NOT EXISTS favorites (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id INTEGER NOT NULL,
-    item_type TEXT NOT NULL CHECK(item_type IN ('story', 'comment')),
-    favorited_at INTEGER NOT NULL,
-    UNIQUE(item_id, item_type)
-);
+-- Drop the separate favorites table (if it exists from prior implementation)
+DROP TABLE IF EXISTS favorites;
 
-CREATE INDEX IF NOT EXISTS idx_favorites_type_time ON favorites(item_type, favorited_at DESC);
+-- Add favorited_at column to stories table
+ALTER TABLE stories ADD COLUMN favorited_at INTEGER;
+
+-- Add favorited_at column to comments table
+ALTER TABLE comments ADD COLUMN favorited_at INTEGER;
+
+-- Index for querying favorited stories ordered by favorited_at
+CREATE INDEX IF NOT EXISTS idx_stories_favorited ON stories(favorited_at DESC) WHERE favorited_at IS NOT NULL;
+
+-- Index for querying favorited comments ordered by favorited_at
+CREATE INDEX IF NOT EXISTS idx_comments_favorited ON comments(favorited_at DESC) WHERE favorited_at IS NOT NULL;

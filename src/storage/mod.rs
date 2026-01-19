@@ -10,7 +10,7 @@ use std::time::Duration;
 use rusqlite::Connection;
 use tokio::sync::{mpsc, oneshot};
 
-pub use types::{CachedFeed, FavoriteType, StorableComment, StorableStory};
+pub use types::{CachedFeed, StorableComment, StorableStory};
 
 use crate::api::Feed;
 
@@ -103,13 +103,16 @@ pub(crate) enum StorageCommand {
         id: u64,
         reply: oneshot::Sender<Result<(), StorageError>>,
     },
-    ToggleFavorite {
-        item_id: u64,
-        favorite_type: FavoriteType,
-        reply: oneshot::Sender<Result<bool, StorageError>>,
+    ToggleStoryFavorite {
+        id: u64,
+        reply: oneshot::Sender<Result<Option<u64>, StorageError>>,
     },
-    GetFavoriteStoryIds {
-        reply: oneshot::Sender<Result<Vec<u64>, StorageError>>,
+    ToggleCommentFavorite {
+        id: u64,
+        reply: oneshot::Sender<Result<Option<u64>, StorageError>>,
+    },
+    GetFavoritedStories {
+        reply: oneshot::Sender<Result<Vec<StorableStory>, StorageError>>,
     },
 }
 
@@ -245,26 +248,26 @@ impl Storage {
         rx.await?
     }
 
-    pub async fn toggle_favorite(
-        &self,
-        item_id: u64,
-        favorite_type: FavoriteType,
-    ) -> Result<bool, StorageError> {
+    pub async fn toggle_story_favorite(&self, id: u64) -> Result<Option<u64>, StorageError> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
-            .send(StorageCommand::ToggleFavorite {
-                item_id,
-                favorite_type,
-                reply: tx,
-            })
+            .send(StorageCommand::ToggleStoryFavorite { id, reply: tx })
             .await?;
         rx.await?
     }
 
-    pub async fn get_favorite_story_ids(&self) -> Result<Vec<u64>, StorageError> {
+    pub async fn toggle_comment_favorite(&self, id: u64) -> Result<Option<u64>, StorageError> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
-            .send(StorageCommand::GetFavoriteStoryIds { reply: tx })
+            .send(StorageCommand::ToggleCommentFavorite { id, reply: tx })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn get_favorited_stories(&self) -> Result<Vec<StorableStory>, StorageError> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(StorageCommand::GetFavoritedStories { reply: tx })
             .await?;
         rx.await?
     }
@@ -290,6 +293,7 @@ mod tests {
             kids: vec![1, 2, 3],
             fetched_at: now_unix(),
             read_at: None,
+            favorited_at: None,
         };
 
         storage.save_story(&story).await.unwrap();
@@ -318,6 +322,7 @@ mod tests {
             kids: vec![],
             fetched_at: now_unix() - 90_000, // 25 hours ago (exceeds 24h TTL)
             read_at: None,
+            favorited_at: None,
         };
 
         storage.save_story(&old_story).await.unwrap();
@@ -347,6 +352,7 @@ mod tests {
             kids: vec![1001],
             fetched_at: now_unix(),
             read_at: None,
+            favorited_at: None,
         };
         storage.save_story(&story).await.unwrap();
 
@@ -361,6 +367,7 @@ mod tests {
                 depth: 0,
                 kids: vec![1002],
                 fetched_at: now_unix(),
+                favorited_at: None,
             },
             StorableComment {
                 id: 1002,
@@ -372,6 +379,7 @@ mod tests {
                 depth: 1,
                 kids: vec![],
                 fetched_at: now_unix(),
+                favorited_at: None,
             },
         ];
 
@@ -401,6 +409,7 @@ mod tests {
                 kids: vec![],
                 fetched_at: now_unix(),
                 read_at: None,
+                favorited_at: None,
             };
             storage.save_story(&story).await.unwrap();
         }
@@ -433,6 +442,7 @@ mod tests {
             kids: vec![1001],
             fetched_at: now_unix(),
             read_at: None,
+            favorited_at: None,
         };
         storage.save_story(&story).await.unwrap();
 
@@ -446,6 +456,7 @@ mod tests {
             depth: 0,
             kids: vec![],
             fetched_at: now_unix(),
+            favorited_at: None,
         }];
         storage.save_comments(123, &v1).await.unwrap();
 
@@ -459,6 +470,7 @@ mod tests {
             depth: 0,
             kids: vec![],
             fetched_at: now_unix(),
+            favorited_at: None,
         }];
         storage.save_comments(123, &v2).await.unwrap();
 
@@ -481,6 +493,7 @@ mod tests {
             kids: vec![1001],
             fetched_at: now_unix(),
             read_at: None,
+            favorited_at: None,
         };
         storage.save_story(&story).await.unwrap();
 
@@ -495,6 +508,7 @@ mod tests {
                 depth: 0,
                 kids: vec![],
                 fetched_at: now_unix(),
+                favorited_at: None,
             },
             StorableComment {
                 id: 1002,
@@ -506,6 +520,7 @@ mod tests {
                 depth: 0,
                 kids: vec![],
                 fetched_at: now_unix(),
+                favorited_at: None,
             },
         ];
         storage.save_comments(123, &v1).await.unwrap();
@@ -520,6 +535,7 @@ mod tests {
             depth: 0,
             kids: vec![],
             fetched_at: now_unix(),
+            favorited_at: None,
         }];
         storage.save_comments(123, &v2).await.unwrap();
 
@@ -543,6 +559,7 @@ mod tests {
             kids: vec![],
             fetched_at: now_unix(),
             read_at: None,
+            favorited_at: None,
         };
         storage.save_story(&story).await.unwrap();
 
@@ -574,6 +591,7 @@ mod tests {
             kids: vec![],
             fetched_at: now_unix(),
             read_at: None,
+            favorited_at: None,
         };
         storage.save_story(&story).await.unwrap();
         storage.mark_story_read(456).await.unwrap();
@@ -589,7 +607,8 @@ mod tests {
             descendants: 5,
             kids: vec![],
             fetched_at: now_unix(),
-            read_at: None, // API doesn't know about read_at
+            read_at: None,      // API doesn't know about read_at
+            favorited_at: None, // API doesn't know about favorited_at
         };
         storage.save_story(&updated).await.unwrap();
 

@@ -103,13 +103,11 @@ fn render_comment_list(frame: &mut Frame, app: &App, area: Rect) {
         .map(|(vis_idx, &i)| {
             let comment = app.comment_tree.get(i).unwrap();
             let is_expanded = app.comment_tree.is_expanded(comment.id);
-            let is_favorite = app.favorited_comment_ids.contains(&comment.id);
             let has_more = &tree_context[vis_idx];
             let lines = comment_to_lines(
                 comment,
                 content_width,
                 is_expanded,
-                is_favorite,
                 theme,
                 has_more,
                 &app.clock,
@@ -138,7 +136,6 @@ fn comment_to_lines(
     comment: &Comment,
     max_width: usize,
     is_expanded: bool,
-    is_favorite: bool,
     theme: &ResolvedTheme,
     has_more_at_depth: &[bool],
     clock: &Arc<dyn Clock>,
@@ -147,15 +144,7 @@ fn comment_to_lines(
     let has_children = !comment.kids.is_empty();
     let show_children_connector = has_children && is_expanded;
 
-    let meta_line = build_meta_line(
-        comment,
-        is_expanded,
-        is_favorite,
-        has_more_at_depth,
-        theme,
-        clock,
-        color,
-    );
+    let meta_line = build_meta_line(comment, is_expanded, has_more_at_depth, theme, clock, color);
     let text_lines = build_text_lines(
         &comment.text,
         comment.depth,
@@ -181,7 +170,6 @@ fn comment_to_lines(
 fn build_meta_line(
     comment: &Comment,
     is_expanded: bool,
-    is_favorite: bool,
     has_more_at_depth: &[bool],
     theme: &ResolvedTheme,
     clock: &Arc<dyn Clock>,
@@ -222,7 +210,7 @@ fn build_meta_line(
         ));
     }
 
-    if is_favorite {
+    if comment.is_favorited() {
         spans.push(Span::styled(
             " \u{2728}",
             Style::default().fg(theme.warning),

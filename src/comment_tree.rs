@@ -45,6 +45,11 @@ impl CommentTree {
         self.comments.get(index)
     }
 
+    /// Get a mutable reference to a comment by its id.
+    pub fn get_mut(&mut self, id: u64) -> Option<&mut Comment> {
+        self.comments.iter_mut().find(|c| c.id == id)
+    }
+
     /// Check if a comment is expanded.
     pub fn is_expanded(&self, id: u64) -> bool {
         self.expanded.contains(&id)

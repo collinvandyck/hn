@@ -376,6 +376,7 @@ fn algolia_to_comment(item: &AlgoliaItem, depth: usize) -> Option<Comment> {
         time: item.created_at_i.unwrap_or(0),
         depth,
         kids: item.children.iter().map(|c| c.id).collect(),
+        favorited_at: None,
     })
 }
 
@@ -534,6 +535,7 @@ mod tests {
             kids: story_kids.clone(),
             fetched_at: 1700000000,
             read_at: None,
+            favorited_at: None,
         };
         storage.save_story(&story).await.unwrap();
 
@@ -614,6 +616,7 @@ mod tests {
             kids: story_kids.clone(),
             fetched_at: 1700000000,
             read_at: None,
+            favorited_at: None,
         };
         storage.save_story(&story).await.unwrap();
 
@@ -851,6 +854,7 @@ mod tests {
                 descendants: kids.len() as u32,
                 kids,
                 read_at: None,
+                favorited_at: None,
             }
         }
 

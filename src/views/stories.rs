@@ -80,10 +80,7 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app
         .stories
         .iter()
-        .map(|story| {
-            let is_favorite = app.favorited_story_ids.contains(&story.id);
-            story_to_list_item(story, theme, &app.clock, is_favorite)
-        })
+        .map(|story| story_to_list_item(story, theme, &app.clock))
         .collect();
 
     let list = List::new(items)
@@ -104,7 +101,6 @@ fn story_to_list_item(
     story: &Story,
     theme: &ResolvedTheme,
     clock: &Arc<dyn Clock>,
-    is_favorite: bool,
 ) -> ListItem<'static> {
     let theme = if story.is_read() {
         theme.dimmed()
@@ -112,7 +108,7 @@ fn story_to_list_item(
         theme.clone()
     };
     let mut title_spans = vec![Span::styled(story.title.clone(), theme.story_title_style())];
-    if is_favorite {
+    if story.is_favorited() {
         title_spans.push(Span::styled(
             " \u{2728}",
             ratatui::style::Style::default().fg(theme.warning),

@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -8,7 +8,6 @@ use tokio::sync::mpsc;
 use crate::api::{ApiError, Comment, Feed, HnClient, Story};
 use crate::comment_tree::CommentTree;
 use crate::settings::{self, Settings};
-use crate::storage::FavoriteType;
 use crate::storage::Storage;
 use crate::theme::{ResolvedTheme, Theme, all_themes};
 use crate::time::{Clock, now_unix};
@@ -230,9 +229,6 @@ pub struct App {
     // Timestamps for when data was last fetched
     pub stories_fetched_at: Option<u64>,
     pub comments_fetched_at: Option<u64>,
-    // Favorite IDs (optimistic state, synced with DB)
-    pub favorited_story_ids: HashSet<u64>,
-    pub favorited_comment_ids: HashSet<u64>,
 }
 
 impl App {
@@ -262,8 +258,6 @@ impl App {
             flash_message: None,
             stories_fetched_at: None,
             comments_fetched_at: None,
-            favorited_story_ids: HashSet::new(),
-            favorited_comment_ids: HashSet::new(),
         }
     }
 
@@ -812,38 +806,19 @@ impl App {
 
     fn spawn_favorites_fetch(&mut self) {
         let storage = self.client.storage().clone();
-        let client = self.client.clone();
         let tx = self.result_tx.clone();
         let generation = self.generation;
         let task_id = self.debug.start_task("Load favorites");
 
         tokio::spawn(async move {
-            let ids = match storage.get_favorite_story_ids().await {
-                Ok(ids) => ids,
-                Err(e) => {
-                    let _ = tx
-                        .send(AsyncResult::Stories(StoriesResult {
-                            generation,
-                            task_id,
-                            result: Err(e.into()),
-                            fetched_at: None,
-                        }))
-                        .await;
-                    return;
+            let result = match storage.get_favorited_stories().await {
+                Ok(storable_stories) => {
+                    let stories: Vec<Story> =
+                        storable_stories.into_iter().map(Into::into).collect();
+                    Ok(stories)
                 }
+                Err(e) => Err(e.into()),
             };
-            if ids.is_empty() {
-                let _ = tx
-                    .send(AsyncResult::Stories(StoriesResult {
-                        generation,
-                        task_id,
-                        result: Ok(vec![]),
-                        fetched_at: None,
-                    }))
-                    .await;
-                return;
-            }
-            let result = client.fetch_stories_by_ids(&ids, false).await;
             let _ = tx
                 .send(AsyncResult::Stories(StoriesResult {
                     generation,
@@ -975,13 +950,13 @@ impl App {
             View::Stories => {
                 if let Some(story) = self.stories.get(self.selected_index) {
                     let id = story.id;
-                    self.spawn_toggle_favorite(id, FavoriteType::Story);
+                    self.spawn_toggle_story_favorite(id);
                 }
             }
             View::Comments { .. } => {
                 if let Some(comment) = self.selected_comment() {
                     let id = comment.id;
-                    self.spawn_toggle_favorite(id, FavoriteType::Comment);
+                    self.spawn_toggle_comment_favorite(id);
                 }
             }
         }
@@ -989,26 +964,43 @@ impl App {
 
     fn toggle_story_favorite(&mut self) {
         if let View::Comments { story_id, .. } = &self.view {
-            self.spawn_toggle_favorite(*story_id, FavoriteType::Story);
+            self.spawn_toggle_story_favorite(*story_id);
         }
     }
 
-    fn spawn_toggle_favorite(&mut self, item_id: u64, favorite_type: FavoriteType) {
-        let set = match favorite_type {
-            FavoriteType::Story => &mut self.favorited_story_ids,
-            FavoriteType::Comment => &mut self.favorited_comment_ids,
-        };
-        let was_favorite = set.contains(&item_id);
-        if was_favorite {
-            set.remove(&item_id);
-            self.flash("unfavorited");
-        } else {
-            set.insert(item_id);
-            self.flash("favorited \u{2728}");
+    fn spawn_toggle_story_favorite(&mut self, id: u64) {
+        // Update local state
+        if let Some(story) = self.stories.iter_mut().find(|s| s.id == id) {
+            if story.favorited_at.is_some() {
+                story.favorited_at = None;
+                self.flash("unfavorited");
+            } else {
+                story.favorited_at = Some(now_unix());
+                self.flash("favorited \u{2728}");
+            }
         }
+        // Persist to DB
         let storage = self.client.storage().clone();
         tokio::spawn(async move {
-            let _ = storage.toggle_favorite(item_id, favorite_type).await;
+            let _ = storage.toggle_story_favorite(id).await;
+        });
+    }
+
+    fn spawn_toggle_comment_favorite(&mut self, id: u64) {
+        // Update local state
+        if let Some(comment) = self.comment_tree.get_mut(id) {
+            if comment.favorited_at.is_some() {
+                comment.favorited_at = None;
+                self.flash("unfavorited");
+            } else {
+                comment.favorited_at = Some(now_unix());
+                self.flash("favorited \u{2728}");
+            }
+        }
+        // Persist to DB
+        let storage = self.client.storage().clone();
+        tokio::spawn(async move {
+            let _ = storage.toggle_comment_favorite(id).await;
         });
     }
 }
@@ -1054,6 +1046,7 @@ mod tests {
                 descendants: 0,
                 kids: vec![],
                 read_at: None,
+                favorited_at: None,
             },
             Story {
                 id: 2,
@@ -1065,6 +1058,7 @@ mod tests {
                 descendants: 0,
                 kids: vec![],
                 read_at: None,
+                favorited_at: None,
             },
         ];
 

@@ -4,7 +4,7 @@ use crate::api::Feed;
 use crate::time::now_unix;
 
 use super::StorageError;
-use super::types::{CachedFeed, FavoriteType, StorableComment, StorableStory};
+use super::types::{CachedFeed, StorableComment, StorableStory};
 
 fn kids_to_json(kids: &[u64]) -> String {
     serde_json::to_string(kids).unwrap_or_else(|_| "[]".to_string())
@@ -15,10 +15,10 @@ fn json_to_kids(json: &str) -> Vec<u64> {
 }
 
 pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<StorableStory, StorageError> {
-    // Use INSERT ... ON CONFLICT to preserve read_at, returning the saved row
+    // Use INSERT ... ON CONFLICT to preserve read_at and favorited_at, returning the saved row
     let mut stmt = conn.prepare(
-        "INSERT INTO stories (id, title, url, score, by, time, descendants, kids, fetched_at, read_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        "INSERT INTO stories (id, title, url, score, by, time, descendants, kids, fetched_at, read_at, favorited_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             url = excluded.url,
@@ -28,8 +28,9 @@ pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<StorableSt
             descendants = excluded.descendants,
             kids = excluded.kids,
             fetched_at = excluded.fetched_at,
-            read_at = COALESCE(stories.read_at, excluded.read_at)
-         RETURNING id, title, url, score, by, time, descendants, kids, fetched_at, read_at",
+            read_at = COALESCE(stories.read_at, excluded.read_at),
+            favorited_at = COALESCE(stories.favorited_at, excluded.favorited_at)
+         RETURNING id, title, url, score, by, time, descendants, kids, fetched_at, read_at, favorited_at",
     )?;
     let saved = stmt.query_row(
         params![
@@ -43,6 +44,7 @@ pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<StorableSt
             kids_to_json(&story.kids),
             story.fetched_at as i64,
             story.read_at.map(|t| t as i64),
+            story.favorited_at.map(|t| t as i64),
         ],
         |row| {
             let kids_json: String = row.get(7)?;
@@ -57,6 +59,7 @@ pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<StorableSt
                 kids: json_to_kids(&kids_json),
                 fetched_at: row.get::<_, i64>(8)? as u64,
                 read_at: row.get::<_, Option<i64>>(9)?.map(|t| t as u64),
+                favorited_at: row.get::<_, Option<i64>>(10)?.map(|t| t as u64),
             })
         },
     )?;
@@ -65,7 +68,7 @@ pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<StorableSt
 
 pub fn get_story(conn: &Connection, id: u64) -> Result<Option<StorableStory>, StorageError> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, url, score, by, time, descendants, kids, fetched_at, read_at
+        "SELECT id, title, url, score, by, time, descendants, kids, fetched_at, read_at, favorited_at
          FROM stories WHERE id = ?1",
     )?;
 
@@ -82,6 +85,7 @@ pub fn get_story(conn: &Connection, id: u64) -> Result<Option<StorableStory>, St
             kids: json_to_kids(&kids_json),
             fetched_at: row.get::<_, i64>(8)? as u64,
             read_at: row.get::<_, Option<i64>>(9)?.map(|t| t as u64),
+            favorited_at: row.get::<_, Option<i64>>(10)?.map(|t| t as u64),
         })
     });
 
@@ -107,9 +111,20 @@ pub fn save_comments(
 
     let tx = conn.unchecked_transaction()?;
 
+    // Use INSERT ... ON CONFLICT to preserve favorited_at
     let mut stmt = tx.prepare(
-        "INSERT OR REPLACE INTO comments (id, story_id, parent_id, text, by, time, depth, kids, fetched_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO comments (id, story_id, parent_id, text, by, time, depth, kids, fetched_at, favorited_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         ON CONFLICT(id) DO UPDATE SET
+            story_id = excluded.story_id,
+            parent_id = excluded.parent_id,
+            text = excluded.text,
+            by = excluded.by,
+            time = excluded.time,
+            depth = excluded.depth,
+            kids = excluded.kids,
+            fetched_at = excluded.fetched_at,
+            favorited_at = COALESCE(comments.favorited_at, excluded.favorited_at)",
     )?;
     for comment in comments {
         stmt.execute(params![
@@ -122,6 +137,7 @@ pub fn save_comments(
             comment.depth as i64,
             kids_to_json(&comment.kids),
             comment.fetched_at as i64,
+            comment.favorited_at.map(|t| t as i64),
         ])?;
     }
     drop(stmt);
@@ -146,7 +162,7 @@ pub fn get_comments(
     story_id: u64,
 ) -> Result<Vec<StorableComment>, StorageError> {
     let mut stmt = conn.prepare(
-        "SELECT id, story_id, parent_id, text, by, time, depth, kids, fetched_at
+        "SELECT id, story_id, parent_id, text, by, time, depth, kids, fetched_at, favorited_at
          FROM comments WHERE story_id = ?1",
     )?;
 
@@ -162,6 +178,7 @@ pub fn get_comments(
             depth: row.get::<_, i64>(6)? as usize,
             kids: json_to_kids(&kids_json),
             fetched_at: row.get::<_, i64>(8)? as u64,
+            favorited_at: row.get::<_, Option<i64>>(9)?.map(|t| t as u64),
         })
     })?;
 
@@ -265,40 +282,83 @@ pub fn mark_story_read(conn: &Connection, id: u64) -> Result<(), StorageError> {
     Ok(())
 }
 
-/// Toggle favorite status for an item. Returns true if now favorited, false if unfavorited.
-pub fn toggle_favorite(
-    conn: &Connection,
-    item_id: u64,
-    favorite_type: FavoriteType,
-) -> Result<bool, StorageError> {
-    let type_str = favorite_type.as_str();
+/// Toggle favorite status for a story. Returns the new favorited_at value (Some if favorited, None if unfavorited).
+pub fn toggle_story_favorite(conn: &Connection, id: u64) -> Result<Option<u64>, StorageError> {
     let existing: Option<i64> = conn
         .query_row(
-            "SELECT id FROM favorites WHERE item_id = ?1 AND item_type = ?2",
-            params![item_id as i64, type_str],
+            "SELECT favorited_at FROM stories WHERE id = ?1",
+            params![id as i64],
             |row| row.get(0),
         )
-        .ok();
+        .ok()
+        .flatten();
     if existing.is_some() {
         conn.execute(
-            "DELETE FROM favorites WHERE item_id = ?1 AND item_type = ?2",
-            params![item_id as i64, type_str],
+            "UPDATE stories SET favorited_at = NULL WHERE id = ?1",
+            params![id as i64],
         )?;
-        Ok(false)
+        Ok(None)
     } else {
+        let now = now_unix();
         conn.execute(
-            "INSERT INTO favorites (item_id, item_type, favorited_at) VALUES (?1, ?2, ?3)",
-            params![item_id as i64, type_str, now_unix() as i64],
+            "UPDATE stories SET favorited_at = ?1 WHERE id = ?2",
+            params![now as i64, id as i64],
         )?;
-        Ok(true)
+        Ok(Some(now))
     }
 }
 
-/// Get all favorited story IDs, ordered by most recently favorited first.
-pub fn get_favorite_story_ids(conn: &Connection) -> Result<Vec<u64>, StorageError> {
+/// Toggle favorite status for a comment. Returns the new favorited_at value (Some if favorited, None if unfavorited).
+pub fn toggle_comment_favorite(conn: &Connection, id: u64) -> Result<Option<u64>, StorageError> {
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT favorited_at FROM comments WHERE id = ?1",
+            params![id as i64],
+            |row| row.get(0),
+        )
+        .ok()
+        .flatten();
+    if existing.is_some() {
+        conn.execute(
+            "UPDATE comments SET favorited_at = NULL WHERE id = ?1",
+            params![id as i64],
+        )?;
+        Ok(None)
+    } else {
+        let now = now_unix();
+        conn.execute(
+            "UPDATE comments SET favorited_at = ?1 WHERE id = ?2",
+            params![now as i64, id as i64],
+        )?;
+        Ok(Some(now))
+    }
+}
+
+/// Get all favorited stories, ordered by most recently favorited first.
+pub fn get_favorited_stories(conn: &Connection) -> Result<Vec<StorableStory>, StorageError> {
     let mut stmt = conn.prepare(
-        "SELECT item_id FROM favorites WHERE item_type = 'story' ORDER BY favorited_at DESC",
+        "SELECT id, title, url, score, by, time, descendants, kids, fetched_at, read_at, favorited_at
+         FROM stories WHERE favorited_at IS NOT NULL ORDER BY favorited_at DESC",
     )?;
-    let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
-    Ok(rows.filter_map(|r| r.ok()).map(|id| id as u64).collect())
+    let rows = stmt.query_map([], |row| {
+        let kids_json: String = row.get(7)?;
+        Ok(StorableStory {
+            id: row.get::<_, i64>(0)? as u64,
+            title: row.get(1)?,
+            url: row.get(2)?,
+            score: row.get::<_, i64>(3)? as u32,
+            by: row.get(4)?,
+            time: row.get::<_, i64>(5)? as u64,
+            descendants: row.get::<_, i64>(6)? as u32,
+            kids: json_to_kids(&kids_json),
+            fetched_at: row.get::<_, i64>(8)? as u64,
+            read_at: row.get::<_, Option<i64>>(9)?.map(|t| t as u64),
+            favorited_at: row.get::<_, Option<i64>>(10)?.map(|t| t as u64),
+        })
+    })?;
+    let mut stories = Vec::new();
+    for row in rows {
+        stories.push(row?);
+    }
+    Ok(stories)
 }

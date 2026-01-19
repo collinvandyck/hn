@@ -1,6 +1,5 @@
 //! Test data builders for view testing.
 
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -30,6 +29,7 @@ pub struct StoryBuilder {
     descendants: u32,
     kids: Vec<u64>,
     read_at: Option<u64>,
+    favorited_at: Option<u64>,
 }
 
 impl Default for StoryBuilder {
@@ -51,6 +51,7 @@ impl StoryBuilder {
             descendants: 10,
             kids: vec![],
             read_at: None,
+            favorited_at: None,
         }
     }
 
@@ -104,6 +105,11 @@ impl StoryBuilder {
         self
     }
 
+    pub fn favorited(mut self) -> Self {
+        self.favorited_at = Some(1700000000);
+        self
+    }
+
     pub fn build(self) -> Story {
         Story {
             id: self.id,
@@ -115,6 +121,7 @@ impl StoryBuilder {
             descendants: self.descendants,
             kids: self.kids,
             read_at: self.read_at,
+            favorited_at: self.favorited_at,
         }
     }
 }
@@ -126,6 +133,7 @@ pub struct CommentBuilder {
     time: u64,
     depth: usize,
     kids: Vec<u64>,
+    favorited_at: Option<u64>,
 }
 
 impl Default for CommentBuilder {
@@ -134,6 +142,7 @@ impl Default for CommentBuilder {
     }
 }
 
+#[allow(dead_code)]
 impl CommentBuilder {
     pub fn new() -> Self {
         Self {
@@ -143,6 +152,7 @@ impl CommentBuilder {
             time: 1700000000,
             depth: 0,
             kids: vec![],
+            favorited_at: None,
         }
     }
 
@@ -176,6 +186,11 @@ impl CommentBuilder {
         self
     }
 
+    pub fn favorited(mut self) -> Self {
+        self.favorited_at = Some(1700000000);
+        self
+    }
+
     pub fn build(self) -> Comment {
         Comment {
             id: self.id,
@@ -184,6 +199,7 @@ impl CommentBuilder {
             time: self.time,
             depth: self.depth,
             kids: self.kids,
+            favorited_at: self.favorited_at,
         }
     }
 }
@@ -210,8 +226,6 @@ pub struct TestAppBuilder {
     config_dir: Option<PathBuf>,
     stories_fetched_at: Option<u64>,
     comments_fetched_at: Option<u64>,
-    favorited_story_ids: HashSet<u64>,
-    favorited_comment_ids: HashSet<u64>,
 }
 
 impl Default for TestAppBuilder {
@@ -244,19 +258,7 @@ impl TestAppBuilder {
             config_dir: None,
             stories_fetched_at: None,
             comments_fetched_at: None,
-            favorited_story_ids: HashSet::new(),
-            favorited_comment_ids: HashSet::new(),
         }
-    }
-
-    pub fn with_favorited_stories(mut self, ids: Vec<u64>) -> Self {
-        self.favorited_story_ids = ids.into_iter().collect();
-        self
-    }
-
-    pub fn with_favorited_comments(mut self, ids: Vec<u64>) -> Self {
-        self.favorited_comment_ids = ids.into_iter().collect();
-        self
     }
 
     pub fn config_dir(mut self, path: PathBuf) -> Self {
@@ -388,8 +390,6 @@ impl TestAppBuilder {
             flash_message: None,
             stories_fetched_at: self.stories_fetched_at,
             comments_fetched_at: self.comments_fetched_at,
-            favorited_story_ids: self.favorited_story_ids,
-            favorited_comment_ids: self.favorited_comment_ids,
         }
     }
 }
