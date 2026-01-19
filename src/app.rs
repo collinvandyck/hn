@@ -16,14 +16,12 @@ pub struct StoriesResult {
     pub generation: u64,
     pub task_id: u64,
     pub result: Result<Vec<Story>, ApiError>,
-    pub fetched_at: Option<u64>,
 }
 
 pub struct CommentsResult {
     pub story_id: u64,
     pub task_id: u64,
     pub result: Result<Vec<Comment>, ApiError>,
-    pub fetched_at: Option<u64>,
 }
 
 pub enum AsyncResult {
@@ -286,7 +284,7 @@ impl App {
         match r.result {
             Ok(stories) => {
                 self.stories = stories;
-                self.stories_fetched_at = r.fetched_at;
+                self.stories_fetched_at = Some(now_unix());
                 self.load.set_loading(false);
                 self.selected_index = 0;
                 self.scroll_offset = 0;
@@ -324,13 +322,6 @@ impl App {
                 } else {
                     self.stories.extend(stories);
                     self.load.current_page += 1;
-                    if let Some(new_ts) = r.fetched_at {
-                        self.stories_fetched_at = Some(
-                            self.stories_fetched_at
-                                .map(|old| old.min(new_ts))
-                                .unwrap_or(new_ts),
-                        );
-                    }
                 }
                 self.load.loading_more = false;
                 if self.should_fill_viewport() {
@@ -365,7 +356,7 @@ impl App {
         match r.result {
             Ok(comments) => {
                 self.comment_tree.set(comments);
-                self.comments_fetched_at = r.fetched_at;
+                self.comments_fetched_at = Some(now_unix());
                 self.load.set_loading(false);
             }
             Err(e) => {
@@ -864,17 +855,11 @@ impl App {
         let task_id = self.debug.start_task(task_desc);
 
         tokio::spawn(async move {
-            let api_result = client.fetch_stories(feed, page, force_refresh).await;
-            let (result, fetched_at) = match api_result {
-                Ok((stories, ts)) => (Ok(stories), ts),
-                Err(e) => (Err(e), None),
-            };
-
+            let result = client.fetch_stories(feed, page, force_refresh).await;
             let stories_result = StoriesResult {
                 generation,
                 task_id,
                 result,
-                fetched_at,
             };
             let msg = if is_more {
                 AsyncResult::MoreStories(stories_result)
@@ -902,17 +887,12 @@ impl App {
         let task_id = self.debug.start_task(task_desc);
 
         tokio::spawn(async move {
-            let api_result = client.fetch_comments_flat(&story, force_refresh).await;
-            let (result, fetched_at) = match api_result {
-                Ok((comments, ts)) => (Ok(comments), ts),
-                Err(e) => (Err(e), None),
-            };
+            let result = client.fetch_comments_flat(&story, force_refresh).await;
             let _ = tx
                 .send(AsyncResult::Comments(CommentsResult {
                     story_id,
                     task_id,
                     result,
-                    fetched_at,
                 }))
                 .await;
         });
