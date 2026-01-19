@@ -140,14 +140,15 @@ impl HnClient {
                 .filter_map(Story::from_item)
                 .collect();
 
-            // Write-through to storage
+            // Write-through to storage, using returned row to get preserved read_at
             if let Some(storage) = &self.storage {
-                for story in &fetched {
-                    storage.save_story(&StorableStory::from(story)).await?;
+                for story in fetched {
+                    let saved = storage.save_story(&StorableStory::from(&story)).await?;
+                    stories.push(saved.into());
                 }
+            } else {
+                stories.extend(fetched);
             }
-
-            stories.extend(fetched);
         }
 
         // Re-sort by original id order

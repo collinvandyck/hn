@@ -75,7 +75,7 @@ impl StorageError {
 pub(crate) enum StorageCommand {
     SaveStory {
         story: StorableStory,
-        reply: oneshot::Sender<Result<(), StorageError>>,
+        reply: oneshot::Sender<Result<StorableStory, StorageError>>,
     },
     GetStory {
         id: u64,
@@ -136,7 +136,7 @@ impl Storage {
         Ok(Self { cmd_tx })
     }
 
-    pub async fn save_story(&self, story: &StorableStory) -> Result<(), StorageError> {
+    pub async fn save_story(&self, story: &StorableStory) -> Result<StorableStory, StorageError> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(StorageCommand::SaveStory {

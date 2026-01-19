@@ -14,9 +14,9 @@ fn json_to_kids(json: &str) -> Vec<u64> {
     serde_json::from_str(json).unwrap_or_default()
 }
 
-pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<(), StorageError> {
-    // Use INSERT ... ON CONFLICT to preserve read_at if already set
-    conn.execute(
+pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<StorableStory, StorageError> {
+    // Use INSERT ... ON CONFLICT to preserve read_at, returning the saved row
+    let mut stmt = conn.prepare(
         "INSERT INTO stories (id, title, url, score, by, time, descendants, kids, fetched_at, read_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT(id) DO UPDATE SET
@@ -28,7 +28,10 @@ pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<(), Storag
             descendants = excluded.descendants,
             kids = excluded.kids,
             fetched_at = excluded.fetched_at,
-            read_at = COALESCE(stories.read_at, excluded.read_at)",
+            read_at = COALESCE(stories.read_at, excluded.read_at)
+         RETURNING id, title, url, score, by, time, descendants, kids, fetched_at, read_at",
+    )?;
+    let saved = stmt.query_row(
         params![
             story.id as i64,
             story.title,
@@ -41,8 +44,23 @@ pub fn save_story(conn: &Connection, story: &StorableStory) -> Result<(), Storag
             story.fetched_at as i64,
             story.read_at.map(|t| t as i64),
         ],
+        |row| {
+            let kids_json: String = row.get(7)?;
+            Ok(StorableStory {
+                id: row.get::<_, i64>(0)? as u64,
+                title: row.get(1)?,
+                url: row.get(2)?,
+                score: row.get::<_, i64>(3)? as u32,
+                by: row.get(4)?,
+                time: row.get::<_, i64>(5)? as u64,
+                descendants: row.get::<_, i64>(6)? as u32,
+                kids: json_to_kids(&kids_json),
+                fetched_at: row.get::<_, i64>(8)? as u64,
+                read_at: row.get::<_, Option<i64>>(9)?.map(|t| t as u64),
+            })
+        },
     )?;
-    Ok(())
+    Ok(saved)
 }
 
 pub fn get_story(conn: &Connection, id: u64) -> Result<Option<StorableStory>, StorageError> {
