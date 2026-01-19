@@ -139,6 +139,8 @@ If the harness process dies, commands will fail with socket errors. Run `harness
 
 5. **Dark theme is forced** via `--dark` flag to skip terminal detection (which would hang in PTY).
 
+6. **Run commands in foreground without extended timeouts**. The scripts handle their own waiting internally (`harness-start` waits ~4s for initialization). Do not use `run_in_background` or set long timeouts—just run them normally and they'll complete quickly.
+
 ## Troubleshooting
 
 ### "socket not found"
