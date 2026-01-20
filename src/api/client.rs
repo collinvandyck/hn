@@ -261,13 +261,12 @@ impl HnClient {
             let mut next_fetch = Vec::new();
             for (id, result) in to_fetch.into_iter().zip(results) {
                 attempted.insert(id);
-                if let Ok(item) = result {
-                    if item.deleted.unwrap_or(false) || item.dead.unwrap_or(false) {
-                        continue;
-                    }
-                    next_fetch.extend(&item.kids);
-                    items.insert(id, item);
+                let Ok(item) = result else { continue };
+                if item.deleted.unwrap_or(false) || item.dead.unwrap_or(false) {
+                    continue;
                 }
+                next_fetch.extend(&item.kids);
+                items.insert(id, item);
             }
             to_fetch = next_fetch;
         }

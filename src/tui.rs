@@ -46,14 +46,12 @@ impl CrosstermEvents {
         loop {
             if let Some(Ok(event)) = self.event_stream.next().await {
                 match event {
-                    CrosstermEvent::Key(key) => {
-                        if key.kind == crossterm::event::KeyEventKind::Press {
-                            return Ok(Event::Key(key));
-                        }
+                    CrosstermEvent::Key(key)
+                        if key.kind == crossterm::event::KeyEventKind::Press =>
+                    {
+                        return Ok(Event::Key(key));
                     }
-                    CrosstermEvent::Resize(_, _) => {
-                        return Ok(Event::Resize);
-                    }
+                    CrosstermEvent::Resize(_, _) => return Ok(Event::Resize),
                     _ => {}
                 }
             }
