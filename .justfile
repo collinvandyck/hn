@@ -46,7 +46,7 @@ ci: fmt-check lint test
 
 # Find duplicate code blocks
 duplicates:
-    mise exec -- npx jscpd src/
+    mise exec -- npx jscpd --reporters consoleFull --min-lines 15 src/
 
 # Code metrics (method counts, function lengths, etc.)
 metrics:

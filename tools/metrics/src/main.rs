@@ -2,8 +2,25 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use syn::visit::Visit;
-use syn::{File, ImplItem, ItemFn, ItemImpl};
+use syn::{Attribute, File, ImplItem, ItemFn, ItemImpl, ItemMod};
 use walkdir::WalkDir;
+
+fn is_test_attr(attr: &Attribute) -> bool {
+    let path = attr.path();
+    if path.is_ident("test") {
+        return true;
+    }
+    if path.is_ident("cfg") {
+        if let Ok(nested) = attr.parse_args::<syn::Ident>() {
+            return nested == "test";
+        }
+    }
+    false
+}
+
+fn has_test_attr(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(is_test_attr)
+}
 
 #[derive(Default)]
 struct Metrics {
@@ -32,10 +49,21 @@ struct FunctionInfo {
 struct MetricsVisitor<'a> {
     file_path: &'a str,
     metrics: &'a mut Metrics,
+    in_test: bool,
 }
 
 impl<'ast> Visit<'ast> for MetricsVisitor<'_> {
+    fn visit_item_mod(&mut self, node: &'ast ItemMod) {
+        if has_test_attr(&node.attrs) {
+            return; // Skip #[cfg(test)] modules entirely
+        }
+        syn::visit::visit_item_mod(self, node);
+    }
+
     fn visit_item_impl(&mut self, node: &'ast ItemImpl) {
+        if self.in_test || has_test_attr(&node.attrs) {
+            return;
+        }
         let type_name = if let syn::Type::Path(p) = &*node.self_ty {
             p.path
                 .segments
@@ -45,35 +73,38 @@ impl<'ast> Visit<'ast> for MetricsVisitor<'_> {
         } else {
             "Unknown".into()
         };
-
         let key = format!("{}::{}", self.file_path, type_name);
-
         for item in &node.items {
             if let ImplItem::Fn(method) = item {
+                if has_test_attr(&method.attrs) {
+                    continue;
+                }
                 let start = method.sig.ident.span().start();
                 let end = method.block.brace_token.span.close().end();
                 let lines = end.line.saturating_sub(start.line) + 1;
-
-                self.metrics.impl_methods.entry(key.clone()).or_default().push(
-                    MethodInfo {
+                self.metrics
+                    .impl_methods
+                    .entry(key.clone())
+                    .or_default()
+                    .push(MethodInfo {
                         name: method.sig.ident.to_string(),
                         file: self.file_path.to_string(),
                         line: start.line,
                         lines,
-                    },
-                );
+                    });
             }
         }
-
         syn::visit::visit_item_impl(self, node);
     }
 
     fn visit_item_fn(&mut self, node: &'ast ItemFn) {
+        if self.in_test || has_test_attr(&node.attrs) {
+            return;
+        }
         let start = node.sig.ident.span().start();
         let end = node.block.brace_token.span.close().end();
         let lines = end.line.saturating_sub(start.line) + 1;
         let params = node.sig.inputs.len();
-
         self.metrics.functions.push(FunctionInfo {
             name: node.sig.ident.to_string(),
             file: self.file_path.to_string(),
@@ -81,7 +112,6 @@ impl<'ast> Visit<'ast> for MetricsVisitor<'_> {
             lines,
             params,
         });
-
         syn::visit::visit_item_fn(self, node);
     }
 }
@@ -93,6 +123,7 @@ fn analyze_file(path: &Path, metrics: &mut Metrics) -> Result<(), Box<dyn std::e
     let mut visitor = MetricsVisitor {
         file_path: &file_path,
         metrics,
+        in_test: false,
     };
     visitor.visit_file(&syntax);
     Ok(())
