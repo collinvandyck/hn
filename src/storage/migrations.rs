@@ -1,3 +1,6 @@
+#![allow(clippy::cast_possible_wrap)]
+// SQLite uses i64; timestamps are u64 but well within i64 range
+
 use rusqlite::Connection;
 
 use super::StorageError;

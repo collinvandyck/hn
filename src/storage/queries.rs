@@ -1,3 +1,10 @@
+#![allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
+// SQLite uses i64 for all integers; HN IDs and timestamps are u64 but well within i64 range
+
 use rusqlite::{Connection, params, params_from_iter};
 
 use crate::api::Feed;
