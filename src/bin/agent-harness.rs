@@ -1,3 +1,5 @@
+#![allow(clippy::print_stderr)] // Debug harness uses stderr intentionally
+
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};

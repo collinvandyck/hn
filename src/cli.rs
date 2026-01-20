@@ -1,3 +1,5 @@
+#![allow(clippy::print_stdout)] // CLI output is intentional
+
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 

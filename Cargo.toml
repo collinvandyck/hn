@@ -64,6 +64,14 @@ nursery = { level = "warn", priority = -1 }
 unreadable_literal = "allow"      # Test timestamps/IDs are often copied from external sources
 struct_excessive_bools = "allow"  # TestAppBuilder in test_utils uses many bool flags
 
+# Selective restriction lints (high-value, low-noise)
+dbg_macro = "warn"                # Catch debug macros in committed code
+print_stdout = "warn"             # Use tracing instead of println
+print_stderr = "warn"             # Use tracing instead of eprintln
+todo = "warn"                     # Catch leftover TODOs
+implicit_clone = "warn"           # Redundant .to_string()/.clone() on owned types
+clone_on_ref_ptr = "warn"         # Flag Arc/Rc clones for review
+
 [dev-dependencies]
 tokio-test = "0.4"
 insta = "1.40"

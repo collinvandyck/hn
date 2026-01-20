@@ -59,6 +59,7 @@ async fn main() -> Result<()> {
     result
 }
 
+#[allow(clippy::print_stdout)] // CLI output is intentional
 fn handle_theme_command(args: &ThemeArgs, custom_config_dir: Option<&PathBuf>) -> Result<()> {
     match &args.command {
         ThemeCommands::List { verbose } => {

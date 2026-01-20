@@ -44,6 +44,10 @@ clean:
 
 ci: fmt-check lint test
 
+# Find duplicate code blocks
+duplicates:
+    mise exec -- npx jscpd src/
+
 themes:
     cargo run -- theme list
 

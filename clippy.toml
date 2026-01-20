@@ -1,0 +1,11 @@
+# Complexity thresholds
+cognitive-complexity-threshold = 25
+excessive-nesting-threshold = 5          # 4 was too aggressive for match arms
+too-many-arguments-threshold = 7
+too-many-lines-threshold = 100
+type-complexity-threshold = 250
+
+# Large type thresholds
+single-char-binding-names-threshold = 4
+max-struct-bools = 3
+max-fn-params-bools = 3

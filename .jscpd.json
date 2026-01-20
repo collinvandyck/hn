@@ -1,0 +1,9 @@
+{
+  "threshold": 5,
+  "reporters": ["console"],
+  "ignore": ["**/snapshots/**", "**/target/**"],
+  "format": ["rust"],
+  "minLines": 5,
+  "minTokens": 50,
+  "absolute": true
+}
