@@ -772,6 +772,10 @@ impl App {
     }
 
     fn refresh(&mut self) {
+        // Favorites is a local-only feed with no API endpoint to refresh from
+        if self.feed == Feed::Favorites {
+            return;
+        }
         match &self.view {
             View::Stories => {
                 self.generation += 1;
