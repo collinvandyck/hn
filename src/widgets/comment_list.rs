@@ -80,6 +80,7 @@ impl<'a> CommentList<'a> {
 impl StatefulWidget for CommentList<'_> {
     type State = CommentListState;
 
+    #[allow(clippy::option_if_let_else, clippy::cast_possible_truncation)] // side effect makes map_or awkward; symbol width fits in u16
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let inner = match &self.block {
             Some(block) => {
@@ -96,9 +97,9 @@ impl StatefulWidget for CommentList<'_> {
 
         let item_heights: Vec<usize> = self.items.iter().map(CommentListItem::height).collect();
         let viewport_height = inner.height as usize;
-        let line_offset = state
-            .selected
-            .map_or(0, |s| calculate_centering_offset(s, &item_heights, viewport_height));
+        let line_offset = state.selected.map_or(0, |s| {
+            calculate_centering_offset(s, &item_heights, viewport_height)
+        });
 
         let symbol_width = self.highlight_symbol.chars().count() as u16;
         let mut current_line = 0;

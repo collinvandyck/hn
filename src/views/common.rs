@@ -23,6 +23,7 @@ pub fn render_error(frame: &mut Frame, error: &str, theme: &ResolvedTheme, area:
 
 /// Render a line with an optional right-aligned timestamp showing when data was fetched.
 /// If `fetched_at` is Some, shows "loaded Xm ago" (dimmed if <5m, normal if >=5m).
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // timestamp fits in u64; width fits in u16
 pub fn render_with_timestamp(
     frame: &mut Frame,
     content_line: Line,

@@ -61,6 +61,8 @@ lto = false
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+unreadable_literal = "allow"      # Test timestamps/IDs are often copied from external sources
+struct_excessive_bools = "allow"  # TestAppBuilder in test_utils uses many bool flags
 
 [dev-dependencies]
 tokio-test = "0.4"

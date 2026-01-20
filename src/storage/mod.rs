@@ -400,7 +400,7 @@ mod tests {
         for id in [100, 101, 102, 103, 104] {
             let story = StorableStory {
                 id,
-                title: format!("Story {}", id),
+                title: format!("Story {id}"),
                 url: None,
                 score: 10,
                 by: "user".to_string(),

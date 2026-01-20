@@ -23,7 +23,7 @@ fn buffer_to_string(buffer: &Buffer) -> String {
         }
         lines.push(line.trim_end().to_string());
     }
-    while lines.last().is_some_and(|l| l.is_empty()) {
+    while lines.last().is_some_and(std::string::String::is_empty) {
         lines.pop();
     }
     lines.join("\n")

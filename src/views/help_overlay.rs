@@ -12,6 +12,7 @@ use crate::app::{App, View};
 use crate::help::{HelpItem, comments_overlay_items, stories_overlay_items};
 use crate::keys::{Keymap, comments_keymap, global_keymap, stories_keymap};
 
+#[allow(clippy::cast_possible_truncation)] // popup dimensions fit in u16
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     if !app.help_overlay {
         return;

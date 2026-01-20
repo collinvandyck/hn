@@ -27,7 +27,7 @@ use crate::widgets::{CommentList, CommentListItem, CommentListState};
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let story_title = match &app.view {
         View::Comments { story_title, .. } => story_title.clone(),
-        _ => String::new(),
+        View::Stories => String::new(),
     };
 
     let chunks = Layout::vertical([

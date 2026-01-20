@@ -151,9 +151,8 @@ pub fn save_comments(
 
     let ids: Vec<i64> = comments.iter().map(|c| c.id as i64).collect();
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let delete_sql = format!(
-        "DELETE FROM comments WHERE story_id = ?1 AND id NOT IN ({placeholders})"
-    );
+    let delete_sql =
+        format!("DELETE FROM comments WHERE story_id = ?1 AND id NOT IN ({placeholders})");
     tx.execute(
         &delete_sql,
         params_from_iter(std::iter::once(story_id as i64).chain(ids)),
@@ -210,13 +209,12 @@ const fn feed_type_str(feed: Feed) -> &'static str {
 fn str_to_feed(s: &str) -> Feed {
     match s {
         "favorites" => Feed::Favorites,
-        "top" => Feed::Top,
         "new" => Feed::New,
         "best" => Feed::Best,
         "ask" => Feed::Ask,
         "show" => Feed::Show,
         "jobs" => Feed::Jobs,
-        _ => Feed::Top,
+        _ => Feed::Top, // "top" or unknown
     }
 }
 
@@ -269,7 +267,10 @@ pub fn get_feed(conn: &Connection, feed: Feed) -> Result<Option<CachedFeed>, Sto
     let mut stmt =
         conn.prepare("SELECT story_id FROM feed_stories WHERE feed_id = ?1 ORDER BY position")?;
     let rows = stmt.query_map(params![feed_id], |row| row.get::<_, i64>(0))?;
-    let ids: Vec<u64> = rows.filter_map(std::result::Result::ok).map(|id| id as u64).collect();
+    let ids: Vec<u64> = rows
+        .filter_map(std::result::Result::ok)
+        .map(|id| id as u64)
+        .collect();
     if ids.is_empty() {
         return Ok(None);
     }

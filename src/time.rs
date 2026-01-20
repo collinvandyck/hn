@@ -42,11 +42,11 @@ pub fn fixed_clock(timestamp: i64) -> Arc<dyn Clock> {
     Arc::new(FixedClock(Utc.timestamp_opt(timestamp, 0).unwrap()))
 }
 
+#[allow(clippy::cast_possible_wrap)] // Unix timestamps won't exceed i64::MAX until year 292 billion
 pub fn format_relative(timestamp: u64, now: DateTime<Utc>) -> String {
-    let then = Utc.timestamp_opt(timestamp as i64, 0).single();
-
-    match then {
-        Some(t) => {
+    Utc.timestamp_opt(timestamp as i64, 0).single().map_or_else(
+        || "?".to_string(),
+        |t| {
             let diff = now.signed_duration_since(t);
             if diff.num_hours() < 1 {
                 format!("{}m ago", diff.num_minutes())
@@ -55,9 +55,8 @@ pub fn format_relative(timestamp: u64, now: DateTime<Utc>) -> String {
             } else {
                 format!("{}d ago", diff.num_days())
             }
-        }
-        None => "?".to_string(),
-    }
+        },
+    )
 }
 
 #[cfg(test)]

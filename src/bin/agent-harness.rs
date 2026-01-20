@@ -11,7 +11,7 @@ use vt100::Parser;
 
 // ─── Protocol Types ─────────────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 enum Command {
     Screen,

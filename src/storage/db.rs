@@ -5,6 +5,7 @@ use super::StorageCommand;
 pub use super::migrations::run_migrations;
 use super::queries;
 
+#[allow(clippy::needless_pass_by_value)] // Worker takes ownership of connection
 pub fn run_worker(conn: Connection, mut cmd_rx: mpsc::Receiver<StorageCommand>) {
     while let Some(cmd) = cmd_rx.blocking_recv() {
         match cmd {

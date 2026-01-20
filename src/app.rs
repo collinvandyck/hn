@@ -124,11 +124,8 @@ impl LoadState {
 
     pub fn should_show_spinner(&self) -> bool {
         const MIN_SPINNER_DURATION: std::time::Duration = std::time::Duration::from_millis(500);
-        if let Some(start) = self.loading_start {
-            self.loading || start.elapsed() < MIN_SPINNER_DURATION
-        } else {
-            false
-        }
+        self.loading_start
+            .is_some_and(|start| self.loading || start.elapsed() < MIN_SPINNER_DURATION)
     }
 
     pub fn clear_error(&mut self) {
@@ -371,6 +368,7 @@ impl App {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)] // Elm architecture: update takes ownership of message
     pub fn update(&mut self, msg: Message) {
         self.load.clear_error();
 
@@ -793,6 +791,7 @@ impl App {
         }
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)] // feeds.len() is small (7)
     fn cycle_feed(&mut self, direction: i32) {
         let feeds = Feed::all();
         let current_idx = feeds.iter().position(|&f| f == self.feed).unwrap_or(0);
@@ -856,8 +855,9 @@ impl App {
         const LAYOUT_OVERHEAD: u16 = 4; // 1 tabs + 1 status bar + 2 borders
         const STORY_HEIGHT: u16 = 2; // title + metadata
 
-        self.viewport_height
-            .map_or(0, |h| (h.saturating_sub(LAYOUT_OVERHEAD) / STORY_HEIGHT) as usize)
+        self.viewport_height.map_or(0, |h| {
+            (h.saturating_sub(LAYOUT_OVERHEAD) / STORY_HEIGHT) as usize
+        })
     }
 
     fn should_fill_viewport(&self) -> bool {

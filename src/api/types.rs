@@ -148,7 +148,7 @@ pub enum Feed {
 }
 
 impl Feed {
-    pub const fn endpoint(&self) -> Option<&'static str> {
+    pub const fn endpoint(self) -> Option<&'static str> {
         match self {
             Self::Favorites => None,
             Self::Top => Some("topstories"),
@@ -160,7 +160,7 @@ impl Feed {
         }
     }
 
-    pub const fn label(&self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Favorites => "Favs",
             Self::Top => "Top",

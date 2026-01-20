@@ -70,8 +70,7 @@ impl ThemeColor {
             "lightmagenta" | "light_magenta" => Color::LightMagenta,
             "lightcyan" | "light_cyan" => Color::LightCyan,
             "white" => Color::White,
-            "reset" | "default" => Color::Reset,
-            _ => Color::Reset,
+            _ => Color::Reset, // "reset", "default", or unknown
         }
     }
 
@@ -146,16 +145,14 @@ const fn dim_amount() -> f32 {
 }
 
 /// Dims a color by reducing its brightness.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // u8 * 0.7 fits in u8
 fn dim_color(color: Color) -> Color {
     match color {
-        Color::Rgb(r, g, b) => {
-            // Reduce brightness by ~40%
-            Color::Rgb(
-                (f32::from(r) * dim_amount()) as u8,
-                (f32::from(g) * dim_amount()) as u8,
-                (f32::from(b) * dim_amount()) as u8,
-            )
-        }
+        Color::Rgb(r, g, b) => Color::Rgb(
+            (f32::from(r) * dim_amount()) as u8,
+            (f32::from(g) * dim_amount()) as u8,
+            (f32::from(b) * dim_amount()) as u8,
+        ),
         // For indexed/named colors, we can't easily compute a dimmed version.
         // Most themes use RGB hex colors, so this fallback is rarely hit.
         other => other,

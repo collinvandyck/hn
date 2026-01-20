@@ -462,7 +462,7 @@ mod tests {
         assert!(comments[0].kids.is_empty());
     }
 
-    /// Verifies that children beyond max_depth (never attempted) are kept in
+    /// Verifies that children beyond `max_depth` (never attempted) are kept in
     /// the kids array so the UI shows they have replies.
     #[test]
     fn test_children_beyond_max_depth_kept_in_kids() {
@@ -485,7 +485,7 @@ mod tests {
     /// Verifies that fresh fetch and cached load produce identical tree ordering.
     ///
     /// This tests the full round-trip:
-    /// 1. Build tree from HnItems (fresh fetch path)
+    /// 1. Build tree from `HnItems` (fresh fetch path)
     /// 2. Save to storage
     /// 3. Load from storage and rebuild tree (cached path)
     /// 4. Assert both produce identical results
@@ -549,7 +549,8 @@ mod tests {
 
         // Cached path: load from storage and rebuild tree
         let cached = storage.get_comments(story_id).await.unwrap();
-        let cached_as_comments: Vec<Comment> = cached.into_iter().map(|c| c.into()).collect();
+        let cached_as_comments: Vec<Comment> =
+            cached.into_iter().map(std::convert::Into::into).collect();
         let cached_comments = order_cached_comments(cached_as_comments, &story_kids);
 
         // Both paths must produce identical results
@@ -564,7 +565,7 @@ mod tests {
             .zip(cached_comments.iter())
             .enumerate()
         {
-            assert_eq!(fresh.id, cached.id, "ID mismatch at position {}", i);
+            assert_eq!(fresh.id, cached.id, "ID mismatch at position {i}");
             assert_eq!(
                 fresh.depth, cached.depth,
                 "Depth mismatch at position {} (id={})",
@@ -629,7 +630,8 @@ mod tests {
         storage.save_comments(story_id, &storable).await.unwrap();
 
         let cached = storage.get_comments(story_id).await.unwrap();
-        let cached_as_comments: Vec<Comment> = cached.into_iter().map(|c| c.into()).collect();
+        let cached_as_comments: Vec<Comment> =
+            cached.into_iter().map(std::convert::Into::into).collect();
         let cached_comments = order_cached_comments(cached_as_comments, &story_kids);
 
         // Verify DFS order: 10, 11, 20, 21, 22
@@ -843,6 +845,7 @@ mod tests {
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
+        #[allow(clippy::cast_possible_truncation)] // test helper; kids.len() is small
         fn make_story(id: u64, kids: Vec<u64>) -> Story {
             Story {
                 id,
