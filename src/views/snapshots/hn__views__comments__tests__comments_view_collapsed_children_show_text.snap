@@ -11,11 +11,11 @@ Nested Collapse Test
 │   ├─ [ ] child_leaf · 1d ago                                                 │
 │   │      Child with no replies                                               │
 │   │                                                                          │
-│   └─ [+] child_parent · 1d ago · 1 replies                                   │
-│          Child with hidden grandchildren                                     │
-│                                                                              │
-│                                                                              │
-│                                                                              │
+│   └─ [-] child_parent · 1d ago · 1 replies                                   │
+│       │  Child with hidden grandchildren                                     │
+│       │                                                                      │
+│       └─ [ ] grandchild · 1d ago                                             │
+│              Hidden grandchild                                               │
 │                                                                              │
 │                                                                              │
 │                                                                              │

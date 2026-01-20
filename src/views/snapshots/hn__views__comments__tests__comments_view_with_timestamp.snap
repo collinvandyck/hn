@@ -5,21 +5,21 @@ expression: output
 Test Story with Timestamp                                          loaded 3m ago
 
 ┌Comments (5)──────────────────────────────────────────────────────────────────┐
-│▶ [+] commenter1 · 1d ago · 2 replies                                         │
-│      This is a great project! I love the vim keybindings.                    │
+│▶ [-] commenter1 · 1d ago · 2 replies                                         │
+│   │  This is a great project! I love the vim keybindings.                    │
+│   │                                                                          │
+│   ├─ [-] commenter2 · 1d ago · 1 replies                                     │
+│   │   │  Agreed, the vim bindings are really nice. Would love to see more    │
+│   │   │  themes.                                                             │
+│   │   │                                                                      │
+│   │   └─ [ ] author · 1d ago                                                 │
+│   │          Themes are already supported! Check the --theme flag.           │
+│   │                                                                          │
+│   └─ [ ] windowsuser · 1d ago                                                │
+│          Does this work on Windows?                                          │
 │                                                                              │
 │  [ ] searcher · 1d ago                                                       │
 │      Nice work! Any plans for search functionality?                          │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
 │                                                                              │
 │                                                                              │
 │                                                                              │

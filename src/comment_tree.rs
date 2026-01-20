@@ -23,10 +23,10 @@ impl CommentTree {
         Self::default()
     }
 
-    /// Replace the comment list and reset expansion state.
+    /// Replace the comment list and expand all comments.
     pub fn set(&mut self, comments: Vec<Comment>) {
         self.comments = comments;
-        self.expanded.clear();
+        self.expand_all();
     }
 
     /// Clear all comments and expansion state.
@@ -268,6 +268,7 @@ mod tests {
     fn test_visible_indices_all_collapsed() {
         let mut tree = CommentTree::new();
         tree.set(sample_tree());
+        tree.collapse_all();
 
         // Only top-level comments visible when all collapsed
         let visible = tree.visible_indices();
@@ -278,6 +279,7 @@ mod tests {
     fn test_visible_indices_with_expansion() {
         let mut tree = CommentTree::new();
         tree.set(sample_tree());
+        tree.collapse_all();
         tree.expand(1); // Expand first comment
 
         let visible = tree.visible_indices();
@@ -290,6 +292,7 @@ mod tests {
     fn test_visible_indices_deep_expansion() {
         let mut tree = CommentTree::new();
         tree.set(sample_tree());
+        tree.collapse_all();
         tree.expand(1); // Expand comment 1
         tree.expand(2); // Expand comment 2
 
@@ -302,6 +305,7 @@ mod tests {
     fn test_expand_collapse() {
         let mut tree = CommentTree::new();
         tree.set(sample_tree());
+        tree.collapse_all();
 
         assert!(!tree.is_expanded(1));
         assert!(tree.expand(1));
@@ -317,6 +321,7 @@ mod tests {
     fn test_expand_subtree() {
         let mut tree = CommentTree::new();
         tree.set(sample_tree());
+        tree.collapse_all();
         tree.expand_subtree(0); // Expand comment 1 and descendants
 
         assert!(tree.is_expanded(1));
@@ -413,12 +418,12 @@ mod tests {
         let mut tree = CommentTree::new();
         tree.set(sample_tree());
 
+        assert_eq!(tree.visible_count(), 6); // All expanded by default
+
+        tree.collapse_all();
         assert_eq!(tree.visible_count(), 2); // Only top-level
 
         tree.expand(1);
         assert_eq!(tree.visible_count(), 4); // +2 children of comment 1
-
-        tree.expand_all();
-        assert_eq!(tree.visible_count(), 6); // All visible
     }
 }

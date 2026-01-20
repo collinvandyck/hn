@@ -211,6 +211,7 @@ pub struct TestAppBuilder {
     stories: Vec<Story>,
     comments: Vec<Comment>,
     expanded_ids: Vec<u64>,
+    all_collapsed: bool,
     selected_index: usize,
     loading: bool,
     loading_start: Option<Instant>,
@@ -243,6 +244,7 @@ impl TestAppBuilder {
             stories: Vec::new(),
             comments: Vec::new(),
             expanded_ids: Vec::new(),
+            all_collapsed: false,
             selected_index: 0,
             loading: false,
             loading_start: None,
@@ -288,6 +290,11 @@ impl TestAppBuilder {
 
     pub fn expanded(mut self, ids: Vec<u64>) -> Self {
         self.expanded_ids = ids;
+        self
+    }
+
+    pub fn all_collapsed(mut self) -> Self {
+        self.all_collapsed = true;
         self
     }
 
@@ -353,6 +360,9 @@ impl TestAppBuilder {
         // Build comment tree with expansion state
         let mut comment_tree = CommentTree::new();
         comment_tree.set(self.comments);
+        if self.all_collapsed {
+            comment_tree.collapse_all();
+        }
         for id in self.expanded_ids {
             comment_tree.expand(id);
         }

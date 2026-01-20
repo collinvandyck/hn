@@ -5,12 +5,12 @@ expression: output
 Multiple Top-Level
 
 ┌Comments (3)──────────────────────────────────────────────────────────────────┐
-│▶ [+] alice · 1d ago · 1 replies                                              │
-│      First top-level comment                                                 │
-│                                                                              │
-│  [+] bob · 1d ago · 1 replies                                                │
-│      Second top-level comment                                                │
-│                                                                              │
+│▶ [-] alice · 1d ago · 1 replies                                              │
+│   │  First top-level comment                                                 │
+│   │                                                                          │
+│  [-] bob · 1d ago · 1 replies                                                │
+│   │  Second top-level comment                                                │
+│   │                                                                          │
 │  [ ] carol · 1d ago                                                          │
 │      Third top-level comment                                                 │
 │                                                                              │

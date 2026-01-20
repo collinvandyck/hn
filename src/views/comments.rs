@@ -388,6 +388,7 @@ mod tests {
 
         let app = TestAppBuilder::new()
             .with_comments(comments)
+            .all_collapsed()
             .view(View::Comments {
                 story_id: 1,
                 story_title: "Collapsed Test".to_string(),

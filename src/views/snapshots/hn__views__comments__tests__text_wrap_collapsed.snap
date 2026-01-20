@@ -5,13 +5,13 @@ expression: collapsed_output
 Wrap Test
 
 ┌Comments (2)──────────────────────────────────────────────────────────────────┐
-│▶ [+] alice · 1d ago · 1 replies                                              │
-│      This is a long comment that needs to wrap. It should wrap at exactly the│
-│      same position whether the comment is collapsed or expanded because the  │
-│      tree glyphs and spaces have identical display widths.                   │
-│                                                                              │
-│                                                                              │
-│                                                                              │
+│▶ [-] alice · 1d ago · 1 replies                                              │
+│   │  This is a long comment that needs to wrap. It should wrap at exactly the│
+│   │  same position whether the comment is collapsed or expanded because the  │
+│   │  tree glyphs and spaces have identical display widths.                   │
+│   │                                                                          │
+│   └─ [ ] bob · 1d ago                                                        │
+│          Child comment                                                       │
 │                                                                              │
 │                                                                              │
 │                                                                              │
