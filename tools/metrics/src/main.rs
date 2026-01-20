@@ -11,6 +11,8 @@ struct Metrics {
     functions: Vec<FunctionInfo>,
 }
 
+#[derive(Clone)]
+#[allow(dead_code)] // Fields used for future detailed reports
 struct MethodInfo {
     name: String,
     file: String,
@@ -18,6 +20,7 @@ struct MethodInfo {
     lines: usize,
 }
 
+#[derive(Clone)]
 struct FunctionInfo {
     name: String,
     file: String,
@@ -29,7 +32,6 @@ struct FunctionInfo {
 struct MetricsVisitor<'a> {
     file_path: &'a str,
     metrics: &'a mut Metrics,
-    source: &'a str,
 }
 
 impl<'ast> Visit<'ast> for MetricsVisitor<'_> {
@@ -87,23 +89,54 @@ impl<'ast> Visit<'ast> for MetricsVisitor<'_> {
 fn analyze_file(path: &Path, metrics: &mut Metrics) -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(path)?;
     let syntax: File = syn::parse_file(&content)?;
-
     let file_path = path.to_string_lossy();
     let mut visitor = MetricsVisitor {
         file_path: &file_path,
         metrics,
-        source: &content,
     };
-
     visitor.visit_file(&syntax);
     Ok(())
 }
 
+fn print_table(headers: &[&str], rows: &[Vec<String>]) {
+    if rows.is_empty() {
+        return;
+    }
+    let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
+    for row in rows {
+        for (i, cell) in row.iter().enumerate() {
+            if i < widths.len() {
+                widths[i] = widths[i].max(cell.len());
+            }
+        }
+    }
+    // Header
+    print!("|");
+    for (i, header) in headers.iter().enumerate() {
+        print!(" {:<width$} |", header, width = widths[i]);
+    }
+    println!();
+    // Separator
+    print!("|");
+    for width in &widths {
+        print!("{:-<width$}--|", "", width = width);
+    }
+    println!();
+    // Rows
+    for row in rows {
+        print!("|");
+        for (i, cell) in row.iter().enumerate() {
+            if i < widths.len() {
+                print!(" {:<width$} |", cell, width = widths[i]);
+            }
+        }
+        println!();
+    }
+}
+
 fn main() {
     let src_dir = std::env::args().nth(1).unwrap_or_else(|| "src".into());
-
     let mut metrics = Metrics::default();
-
     for entry in WalkDir::new(&src_dir)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -122,47 +155,65 @@ fn main() {
         .map(|(k, v)| (k, v.len()))
         .collect();
     impl_counts.sort_by(|a, b| b.1.cmp(&a.1));
-
-    println!("| Type | Methods |");
-    println!("|------|---------|");
-    for (name, count) in impl_counts.iter().take(15) {
-        let short_name = name.rsplit("src/").next().unwrap_or(name);
-        println!("| {} | {} |", short_name, count);
-    }
+    let rows: Vec<Vec<String>> = impl_counts
+        .iter()
+        .take(15)
+        .map(|(name, count)| {
+            let short = name.rsplit("src/").next().unwrap_or(name);
+            vec![short.to_string(), count.to_string()]
+        })
+        .collect();
+    print_table(&["Type", "Methods"], &rows);
 
     // Warn about types with too many methods
     let threshold = 20;
     let large_types: Vec<_> = impl_counts.iter().filter(|(_, c)| *c > threshold).collect();
     if !large_types.is_empty() {
-        println!("\n**Warning:** {} types have >{} methods\n", large_types.len(), threshold);
+        println!(
+            "\n**Warning:** {} types have >{} methods\n",
+            large_types.len(),
+            threshold
+        );
     }
 
     // Report: Long functions
     println!("\n## Longest functions\n");
     let mut fns = metrics.functions.clone();
     fns.sort_by(|a, b| b.lines.cmp(&a.lines));
-
-    println!("| Function | File | Lines |");
-    println!("|----------|------|-------|");
-    for f in fns.iter().take(10) {
-        let short_file = f.file.rsplit("src/").next().unwrap_or(&f.file);
-        println!("| {} | {}:{} | {} |", f.name, short_file, f.line, f.lines);
-    }
+    let rows: Vec<Vec<String>> = fns
+        .iter()
+        .take(10)
+        .map(|f| {
+            let short = f.file.rsplit("src/").next().unwrap_or(&f.file);
+            vec![
+                f.name.clone(),
+                format!("{}:{}", short, f.line),
+                f.lines.to_string(),
+            ]
+        })
+        .collect();
+    print_table(&["Function", "Location", "Lines"], &rows);
 
     // Report: Functions with many parameters
     println!("\n## Functions by parameter count\n");
     let mut by_params: Vec<_> = metrics.functions.iter().filter(|f| f.params > 4).collect();
     by_params.sort_by(|a, b| b.params.cmp(&a.params));
-
     if by_params.is_empty() {
         println!("No functions with >4 parameters.");
     } else {
-        println!("| Function | File | Params |");
-        println!("|----------|------|--------|");
-        for f in by_params.iter().take(10) {
-            let short_file = f.file.rsplit("src/").next().unwrap_or(&f.file);
-            println!("| {} | {}:{} | {} |", f.name, short_file, f.line, f.params);
-        }
+        let rows: Vec<Vec<String>> = by_params
+            .iter()
+            .take(10)
+            .map(|f| {
+                let short = f.file.rsplit("src/").next().unwrap_or(&f.file);
+                vec![
+                    f.name.clone(),
+                    format!("{}:{}", short, f.line),
+                    f.params.to_string(),
+                ]
+            })
+            .collect();
+        print_table(&["Function", "Location", "Params"], &rows);
     }
 
     // Summary

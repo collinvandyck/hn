@@ -48,6 +48,10 @@ ci: fmt-check lint test
 duplicates:
     mise exec -- npx jscpd src/
 
+# Code metrics (method counts, function lengths, etc.)
+metrics:
+    cargo run --manifest-path tools/metrics/Cargo.toml --quiet -- src
+
 themes:
     cargo run -- theme list
 

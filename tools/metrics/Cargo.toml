@@ -9,4 +9,5 @@ path = "src/main.rs"
 
 [dependencies]
 syn = { version = "2", features = ["full", "parsing", "visit"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 walkdir = "2"
