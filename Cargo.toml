@@ -58,6 +58,10 @@ debug = 2
 strip = false
 lto = false
 
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
 [dev-dependencies]
 tokio-test = "0.4"
 insta = "1.40"
