@@ -107,6 +107,14 @@ fn render_feed_tabs(frame: &mut Frame, app: &App, area: Rect) {
         ));
     }
 
+    // Show sort indicator when not using default sort
+    if app.story_sort != StorySort::Position {
+        spans.push(Span::styled(
+            format!("[sort: {}]", app.story_sort.label()),
+            theme.active_tab_style(),
+        ));
+    }
+
     let tabs_line = Line::from(spans);
     render_with_timestamp(
         frame,
@@ -134,7 +142,15 @@ fn render_story_list(frame: &mut Frame, app: &App, area: Rect) {
         .enumerate()
         .map(|(i, story)| {
             let is_selected = i == app.selected_index;
-            story_to_list_item(story, theme, &app.clock, app.feed, widths, is_selected)
+            story_to_list_item(
+                story,
+                theme,
+                &app.clock,
+                app.feed,
+                widths,
+                is_selected,
+                app.story_sort,
+            )
         })
         .collect();
 
@@ -159,7 +175,10 @@ fn story_to_list_item(
     feed: Feed,
     widths: ColumnWidths,
     is_selected: bool,
+    sort: StorySort,
 ) -> ListItem<'static> {
+    use ratatui::style::Modifier;
+
     let theme = if story.is_read() && feed != Feed::Favorites && !is_selected {
         theme.dimmed()
     } else {
@@ -182,10 +201,26 @@ fn story_to_list_item(
     } else {
         story.by.clone()
     };
+    // Apply bold to the sorted field
+    let score_style = if sort == StorySort::ScoreDesc {
+        theme.story_score_style().add_modifier(Modifier::BOLD)
+    } else {
+        theme.story_score_style()
+    };
+    let comments_style = if sort == StorySort::CommentsDesc {
+        theme.story_comments_style().add_modifier(Modifier::BOLD)
+    } else {
+        theme.story_comments_style()
+    };
+    let time_style = if sort == StorySort::TimeDesc {
+        theme.story_time_style().add_modifier(Modifier::BOLD)
+    } else {
+        theme.story_time_style()
+    };
     let meta_line = Line::from(vec![
         Span::styled(
             format!("▲ {:>width$}", story.score, width = widths.score),
-            theme.story_score_style(),
+            score_style,
         ),
         Span::styled(" | ", theme.dim_style()),
         Span::styled(
@@ -199,13 +234,10 @@ fn story_to_list_item(
                 story.descendants,
                 width = widths.comments
             ),
-            theme.story_comments_style(),
+            comments_style,
         ),
         Span::styled(" | ", theme.dim_style()),
-        Span::styled(
-            format_relative(story.time, clock.now()),
-            theme.story_time_style(),
-        ),
+        Span::styled(format_relative(story.time, clock.now()), time_style),
     ]);
     ListItem::new(vec![title_line, meta_line])
 }
@@ -213,13 +245,8 @@ fn story_to_list_item(
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let keymap = global_keymap().extend(stories_keymap());
     let help_text = stories_help().format(&keymap, false);
-    let label = if app.story_sort == StorySort::Position {
-        app.feed.label().to_string()
-    } else {
-        format!("{} [{}]", app.feed.label(), app.story_sort.label())
-    };
     StatusBar::new(&app.theme)
-        .label(&label)
+        .label(app.feed.label())
         .position(app.selected_index + 1, app.stories.len())
         .help(&help_text)
         .flash(app.flash_text())
