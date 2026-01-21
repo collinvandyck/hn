@@ -21,6 +21,24 @@ fn json_to_kids(json: &str) -> Vec<u64> {
     serde_json::from_str(json).unwrap_or_default()
 }
 
+const fn sort_to_str(sort: StorySort) -> &'static str {
+    match sort {
+        StorySort::Position => "position",
+        StorySort::ScoreDesc => "score",
+        StorySort::CommentsDesc => "comments",
+        StorySort::TimeDesc => "time",
+    }
+}
+
+fn str_to_sort(s: &str) -> StorySort {
+    match s {
+        "score" => StorySort::ScoreDesc,
+        "comments" => StorySort::CommentsDesc,
+        "time" => StorySort::TimeDesc,
+        _ => StorySort::Position,
+    }
+}
+
 fn story_from_row(row: &rusqlite::Row) -> rusqlite::Result<StorableStory> {
     let kids_json: String = row.get(7)?;
     Ok(StorableStory {
@@ -239,15 +257,15 @@ pub fn save_feed(conn: &Connection, feed: Feed, ids: &[u64]) -> Result<(), Stora
 
 pub fn get_feed(conn: &Connection, feed: Feed) -> Result<Option<CachedFeed>, StorageError> {
     let feed_type = feed_type_str(feed);
-    // Get feed metadata
-    let row: Option<(i64, i64)> = conn
+    // Get feed metadata including sort
+    let row: Option<(i64, i64, String)> = conn
         .query_row(
-            "SELECT id, fetched_at FROM feeds WHERE feed_type = ?1",
+            "SELECT id, fetched_at, sort FROM feeds WHERE feed_type = ?1",
             params![feed_type],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .ok();
-    let Some((feed_id, fetched_at)) = row else {
+    let Some((feed_id, fetched_at, sort_str)) = row else {
         return Ok(None);
     };
     // Get story IDs in order
@@ -265,7 +283,31 @@ pub fn get_feed(conn: &Connection, feed: Feed) -> Result<Option<CachedFeed>, Sto
         feed: str_to_feed(feed_type),
         ids,
         fetched_at: fetched_at as u64,
+        sort: str_to_sort(&sort_str),
     }))
+}
+
+/// Update the sort preference for a feed. Creates the feed record if it doesn't exist.
+pub fn set_feed_sort(conn: &Connection, feed: Feed, sort: StorySort) -> Result<(), StorageError> {
+    let feed_type = feed_type_str(feed);
+    conn.execute(
+        "INSERT INTO feeds (feed_type, fetched_at, sort) VALUES (?1, 0, ?2)
+         ON CONFLICT(feed_type) DO UPDATE SET sort = excluded.sort",
+        params![feed_type, sort_to_str(sort)],
+    )?;
+    Ok(())
+}
+
+/// Get just the sort preference for a feed, without loading story IDs.
+pub fn get_feed_sort(conn: &Connection, feed: Feed) -> Option<StorySort> {
+    let feed_type = feed_type_str(feed);
+    conn.query_row(
+        "SELECT sort FROM feeds WHERE feed_type = ?1",
+        params![feed_type],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+    .map(|s| str_to_sort(&s))
 }
 
 pub fn mark_story_read(conn: &Connection, id: u64) -> Result<(), StorageError> {

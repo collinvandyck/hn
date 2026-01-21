@@ -126,6 +126,7 @@ pub struct CachedFeed {
     pub feed: Feed,
     pub ids: Vec<u64>,
     pub fetched_at: u64,
+    pub sort: StorySort,
 }
 
 #[allow(dead_code)] // Used by future features
@@ -135,6 +136,7 @@ impl CachedFeed {
             feed,
             ids,
             fetched_at: now_unix(),
+            sort: StorySort::default(),
         }
     }
 

@@ -38,6 +38,8 @@ pub struct StoriesResult {
     pub task_id: u64,
     pub result: Result<Vec<Story>, ApiError>,
     pub fetched_at: Option<u64>,
+    /// Stored sort preference for this feed (from DB).
+    pub stored_sort: Option<StorySort>,
 }
 
 pub struct CommentsResult {
@@ -356,7 +358,11 @@ impl App {
                 self.load.set_loading(false);
                 self.selected_index = 0;
                 self.scroll_offset = 0;
-                // Re-apply sort if user had sorted before refresh
+                // Apply stored sort preference if available, otherwise keep current
+                if let Some(stored_sort) = r.stored_sort {
+                    self.story_sort = stored_sort;
+                }
+                // Apply sort if not default
                 if self.story_sort != StorySort::Position {
                     self.spawn_sorted_stories_fetch();
                 }
@@ -598,6 +604,7 @@ impl App {
         }
         self.story_sort = self.story_sort.next();
         self.spawn_sorted_stories_fetch();
+        self.spawn_save_feed_sort();
         self.selected_index = 0;
         self.scroll_offset = 0;
     }
@@ -989,7 +996,7 @@ impl App {
         self.load.current_page = 0;
         self.load.has_more = self.feed != Feed::Favorites; // Favorites don't paginate
         self.load.loading_more = false;
-        self.story_sort = StorySort::default();
+        // Don't reset story_sort here - it will be loaded from DB via stored_sort
         if self.feed == Feed::Favorites {
             self.spawn_favorites_fetch();
         } else {
@@ -1004,6 +1011,8 @@ impl App {
         let task_id = self.debug.start_task("Load favorites");
 
         tokio::spawn(async move {
+            // Get stored sort for Favorites feed
+            let stored_sort = storage.get_feed_sort(Feed::Favorites).await;
             let result = match storage.get_favorited_stories().await {
                 Ok(storable_stories) => {
                     let stories: Vec<Story> =
@@ -1018,6 +1027,7 @@ impl App {
                     task_id,
                     result,
                     fetched_at: None,
+                    stored_sort,
                 }))
                 .await;
         });
@@ -1089,6 +1099,18 @@ impl App {
         };
         let task_id = self.debug.start_task(task_desc);
         tokio::spawn(async move {
+            // Get the stored sort for this feed (only for initial load, not "more")
+            let stored_sort = if is_more {
+                None
+            } else {
+                client
+                    .storage()
+                    .get_feed(feed)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|f| f.sort)
+            };
             let result = client.fetch_stories(feed, page, force_refresh).await;
             let (result, fetched_at) = match result {
                 Ok(fetched) => (Ok(fetched.stories), Some(fetched.fetched_at)),
@@ -1099,6 +1121,7 @@ impl App {
                 task_id,
                 result,
                 fetched_at,
+                stored_sort,
             };
             let msg = if is_more {
                 AsyncResult::MoreStories(stories_result)
@@ -1179,6 +1202,15 @@ impl App {
                     sort,
                 }))
                 .await;
+        });
+    }
+
+    fn spawn_save_feed_sort(&self) {
+        let storage = self.client.storage().clone();
+        let feed = self.feed;
+        let sort = self.story_sort;
+        tokio::spawn(async move {
+            let _ = storage.set_feed_sort(feed, sort).await;
         });
     }
 
@@ -1533,7 +1565,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_stories_resets_sort_order() {
+    async fn load_stories_preserves_sort_until_db_result() {
         let stories = vec![
             StoryBuilder::new().id(1).score(50).build(),
             StoryBuilder::new().id(2).score(200).build(),
@@ -1541,7 +1573,30 @@ mod tests {
         let mut app = TestAppBuilder::new().with_stories(stories).build();
         app.update(Message::CycleSortOrder);
         assert_eq!(app.story_sort, StorySort::ScoreDesc);
+        // load_stories no longer resets sort - it comes from DB via stored_sort
         app.load_stories();
+        // Sort is preserved until StoriesResult arrives with stored_sort
+        assert_eq!(app.story_sort, StorySort::ScoreDesc);
+    }
+
+    #[tokio::test]
+    async fn stories_result_applies_stored_sort() {
+        let stories = vec![
+            StoryBuilder::new().id(1).score(50).build(),
+            StoryBuilder::new().id(2).score(200).build(),
+        ];
+        let mut app = TestAppBuilder::new().with_stories(stories).build();
+        // Start with ScoreDesc
+        app.story_sort = StorySort::ScoreDesc;
+        // Receive stories with stored_sort = Position (DB value)
+        app.handle_async_result(AsyncResult::Stories(StoriesResult {
+            generation: app.generation,
+            task_id: 0,
+            result: Ok(vec![StoryBuilder::new().id(3).build()]),
+            fetched_at: Some(1700000000),
+            stored_sort: Some(StorySort::Position),
+        }));
+        // Sort should be updated to Position from stored_sort
         assert_eq!(app.story_sort, StorySort::Position);
     }
 

@@ -62,6 +62,14 @@ pub fn run_worker(conn: Connection, mut cmd_rx: mpsc::Receiver<StorageCommand>) 
                     .map(|opt| opt.map(|r| (r.stories, r.fetched_at)));
                 let _ = reply.send(result);
             }
+            StorageCommand::SetFeedSort { feed, sort, reply } => {
+                let result = queries::set_feed_sort(&conn, feed, sort);
+                let _ = reply.send(result);
+            }
+            StorageCommand::GetFeedSort { feed, reply } => {
+                let result = queries::get_feed_sort(&conn, feed);
+                let _ = reply.send(result);
+            }
         }
     }
 }

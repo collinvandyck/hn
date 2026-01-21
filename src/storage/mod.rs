@@ -124,6 +124,15 @@ pub enum StorageCommand {
         sort: StorySort,
         reply: oneshot::Sender<Result<Option<(Vec<StorableStory>, u64)>, StorageError>>,
     },
+    SetFeedSort {
+        feed: Feed,
+        sort: StorySort,
+        reply: oneshot::Sender<Result<(), StorageError>>,
+    },
+    GetFeedSort {
+        feed: Feed,
+        reply: oneshot::Sender<Option<StorySort>>,
+    },
 }
 
 #[derive(Clone)]
@@ -310,6 +319,29 @@ impl Storage {
             })
             .await?;
         rx.await?
+    }
+
+    /// Set the sort preference for a feed.
+    pub async fn set_feed_sort(&self, feed: Feed, sort: StorySort) -> Result<(), StorageError> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(StorageCommand::SetFeedSort {
+                feed,
+                sort,
+                reply: tx,
+            })
+            .await?;
+        rx.await?
+    }
+
+    /// Get just the sort preference for a feed.
+    pub async fn get_feed_sort(&self, feed: Feed) -> Option<StorySort> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(StorageCommand::GetFeedSort { feed, reply: tx })
+            .await
+            .ok()?;
+        rx.await.ok()?
     }
 }
 
