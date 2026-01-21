@@ -15,7 +15,7 @@ to something that you personally want.
 ## install
 
 ```
-cargo install --path .
+just install
 ```
 
 the binary is called `hn`.
